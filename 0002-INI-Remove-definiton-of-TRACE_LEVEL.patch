@@ -1,0 +1,36 @@
+From fded2a4f09a8c124f631a691f11ba5b87026cc6f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Michal=20=C5=BDidek?= <mzidek@redhat.com>
+Date: Wed, 15 Nov 2017 18:31:47 +0100
+Subject: [PATCH] INI: Remove definiton of TRACE_LEVEL
+
+Macros TRACE_LEVEL 7 and TRACE_HOME should only be defined
+in testing builds where we want debug messages to be generated.
+
+The macros are leftovers from the previous patch where they
+were improperly added for debug purposes.
+
+Resolves:
+https://pagure.io/SSSD/ding-libs/issue/3182
+
+Reviewed-by: Robbie Harwood <rharwood@redhat.com>
+(cherry picked from commit a731d8c8c515e7e42a4fb448e0ecb6934d5bf99b)
+---
+ ini/ini_augment.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/ini/ini_augment.c b/ini/ini_augment.c
+index 9d83ad9f09caa2d3d21fdeb7d93c57be27d43947..5a5a1736f65aaa1e1eb703c5e5548465707a11e6 100644
+--- a/ini/ini_augment.c
++++ b/ini/ini_augment.c
+@@ -32,8 +32,6 @@
+ #include <sys/types.h>
+ #include <regex.h>
+ #include <unistd.h>
+-#define TRACE_LEVEL 7
+-#define TRACE_HOME
+ #include "trace.h"
+ #include "collection.h"
+ #include "collection_tools.h"
+-- 
+2.9.5
+

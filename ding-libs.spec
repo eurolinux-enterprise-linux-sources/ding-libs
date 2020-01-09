@@ -1,6 +1,6 @@
 Name: ding-libs
 Version: 0.6.1
-Release: 29%{?dist}
+Release: 32%{?dist}
 Summary: "Ding is not GLib" assorted utility libraries
 Group: Development/Libraries
 License: LGPLv3+
@@ -19,7 +19,12 @@ BuildRoot: %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 %global ini_config_version 1.3.1
 
 ### Patches ###
-Patch0001: ding-libs-fake-soname.patch
+Patch0001: 0001-INI-Silence-ini_augment-match-failures.patch
+Patch0002: 0002-INI-Remove-definiton-of-TRACE_LEVEL.patch
+
+
+### Downstream only ###
+Patch999: ding-libs-fake-soname.patch
 
 ### Dependencies ###
 # ding-libs is a meta-package that will pull in all of its own
@@ -322,7 +327,10 @@ structure
 
 %prep
 %setup -q
-%patch0001 -p1 -b .soname
+
+for p in %patches ; do
+    %__patch -p1 -i $p
+done
 
 %build
 autoreconf -ivf
@@ -357,6 +365,17 @@ rm -f */doc/html/installdox
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Thu Jun  7 2018 Michal Židek <mzidek@redhat.com> - 0.6.1-32
+- Previous change in spec file broke the application of downstream only patch
+- Related: rhbz#1507607 - ding-libs: libini_config: `ini_config_augment` reports errors on match failure
+
+* Thu Jun  7 2018 Michal Židek <mzidek@redhat.com> - 0.6.1-31
+- Resolves: rhbz#1507607 - ding-libs: libini_config: `ini_config_augment` reports errors on match failure
+
+* Thu Jun 07 2018 Michal Židek  <mzidek@redhat.com> - 0.6.1-30
+- Adopting to use Downstream Helper for bellow BZ backport
+- Related: rhbz#1507607 - ding-libs: libini_config: `ini_config_augment` reports errors on match failure
+
 * Mon Jun 27 2016 Michal Židek  <mzidek@redhat.com> - 0.6.1-29
 - Fix rpmdiff failure for 'Binary stripping'
 - Resolves: rhbz#1480270 - Rebase ding-libs to the latest upstream release
