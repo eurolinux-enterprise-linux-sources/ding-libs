@@ -966,17 +966,38 @@ static int handle_kvp(struct parser_obj *po, uint32_t *action)
     /* Check if we have the key */
     if (*(str) == '=') {
         TRACE_ERROR_STRING("No key", str);
-        po->last_error = ERR_NOKEY;
-        *action = PARSE_ERROR;
+
+        if (po->parse_flags & INI_PARSE_IGNORE_NON_KVP) {
+        /* Clean everything as if nothing happened  */
+            free(po->last_read);
+            po->last_read = NULL;
+            po->last_read_len = 0;
+            *action = PARSE_READ;
+        } else {
+            po->last_error = ERR_NOKEY;
+            *action = PARSE_ERROR;
+        }
+
+        TRACE_FLOW_EXIT();
         return EOK;
     }
 
     /* Find "=" */
     eq = strchr(str, '=');
     if (eq == NULL) {
-        TRACE_ERROR_STRING("No equal sign", str);
-        po->last_error = ERR_NOEQUAL;
-        *action = PARSE_ERROR;
+        if (po->parse_flags & INI_PARSE_IGNORE_NON_KVP) {
+        /* Clean everything as if nothing happened  */
+            free(po->last_read);
+            po->last_read = NULL;
+            po->last_read_len = 0;
+            *action = PARSE_READ;
+        } else {
+            TRACE_ERROR_STRING("No equal sign", str);
+            po->last_error = ERR_NOEQUAL;
+            *action = PARSE_ERROR;
+        }
+
+        TRACE_FLOW_EXIT();
         return EOK;
     }
 
@@ -992,6 +1013,7 @@ static int handle_kvp(struct parser_obj *po, uint32_t *action)
         TRACE_ERROR_STRING("Key name is too long", str);
         po->last_error = ERR_LONGKEY;
         *action = PARSE_ERROR;
+        TRACE_FLOW_EXIT();
         return EOK;
     }
 
@@ -1000,6 +1022,7 @@ static int handle_kvp(struct parser_obj *po, uint32_t *action)
         error = complete_value_processing(po);
         if (error) {
             TRACE_ERROR_NUMBER("Failed to complete value processing", error);
+            TRACE_FLOW_EXIT();
             return error;
         }
     }
@@ -1008,6 +1031,7 @@ static int handle_kvp(struct parser_obj *po, uint32_t *action)
     po->key = malloc(len + 1);
     if (!(po->key)) {
         TRACE_ERROR_NUMBER("Failed to dup key", ENOMEM);
+        TRACE_FLOW_EXIT();
         return ENOMEM;
     }
 
@@ -1034,6 +1058,7 @@ static int handle_kvp(struct parser_obj *po, uint32_t *action)
     dupval = malloc(len + 1);
     if (!dupval) {
         TRACE_ERROR_NUMBER("Failed to dup value", ENOMEM);
+        TRACE_FLOW_EXIT();
         return ENOMEM;
     }
 
@@ -1046,6 +1071,7 @@ static int handle_kvp(struct parser_obj *po, uint32_t *action)
     if (error) {
         TRACE_ERROR_NUMBER("Failed to create arrays", error);
         free(dupval);
+        TRACE_FLOW_EXIT();
         return error;
     }
 
@@ -1058,6 +1084,7 @@ static int handle_kvp(struct parser_obj *po, uint32_t *action)
     if (error) {
         TRACE_ERROR_NUMBER("Failed to add value to arrays", error);
         free(dupval);
+        TRACE_FLOW_EXIT();
         return error;
     }
 

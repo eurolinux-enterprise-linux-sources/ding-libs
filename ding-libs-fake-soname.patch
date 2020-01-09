@@ -1,7 +1,7 @@
-diff -up ding-libs-0.5.0/Makefile.am.soname ding-libs-0.5.0/Makefile.am
---- ding-libs-0.5.0/Makefile.am.soname	2015-06-23 20:40:31.768363383 +0200
-+++ ding-libs-0.5.0/Makefile.am	2015-06-23 20:41:13.996493605 +0200
-@@ -142,7 +142,7 @@ libcollection_la_SOURCES = \
+diff -up ding-libs-0.6.0/Makefile.am.soname ding-libs-0.6.0/Makefile.am
+--- ding-libs-0.6.0/Makefile.am.soname	2016-06-27 13:16:02.717757114 +0200
++++ ding-libs-0.6.0/Makefile.am	2016-06-27 13:16:49.614901906 +0200
+@@ -150,7 +150,7 @@ libcollection_la_SOURCES = \
      trace/trace.h
  libcollection_la_DEPENDENCIES = collection/libcollection.sym
  libcollection_la_LDFLAGS = \
@@ -10,11 +10,11 @@ diff -up ding-libs-0.5.0/Makefile.am.soname ding-libs-0.5.0/Makefile.am
      -Wl,--version-script=$(top_srcdir)/collection/libcollection.sym
  
  check_PROGRAMS += \
-@@ -268,7 +268,7 @@ libini_config_la_LIBADD = \
+@@ -276,7 +276,7 @@ libini_config_la_LIBADD = \
      libref_array.la \
      libbasicobjects.la
  libini_config_la_LDFLAGS = \
--    -version-info 6:0:1 \
+-    -version-info 7:0:2 \
 +    -version-info 5:0:2 \
      -Wl,--version-script=$(top_srcdir)/ini/libini_config.sym
  
