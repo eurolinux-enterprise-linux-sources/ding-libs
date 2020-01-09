@@ -29,23 +29,12 @@
 #include "trace.h"
 #include "ini_defines.h"
 #include "ini_valueobj.h"
-#include "ini_config_priv.h"
 #include "ini_configobj.h"
+#include "ini_config_priv.h"
 #include "collection.h"
 #include "collection_queue.h"
 
 #define INI_WARNING 0xA0000000 /* Warning bit */
-
-/* This constant belongs to ini_defines.h. Move from ini_config - TBD */
-#define COL_CLASS_INI_BASE        20000
-#define COL_CLASS_INI_SECTION     COL_CLASS_INI_BASE + 1
-/**
- * @brief Name of the default section.
- *
- * This is the name of the implied section where orphan key-value
- * pairs will be put.
- */
-#define INI_DEFAULT_SECTION "default"
 
 
 struct parser_obj {

@@ -801,6 +801,56 @@ int col_get_item(struct collection_item *ci,
                  struct collection_item **item);
 
 /**
+ * @brief Search function to get one of the duplicate items.
+ *
+ * Convenience function to get an individual item out of the list of duplicates.
+ * Caller should be aware that this is not a copy of the item
+ * but the pointer to actual item stored in the collection.
+ * The returned pointer should never be altered or freed by caller
+ * of the function.
+ * The caller should be sure that the collection does not go out of scope
+ * while the pointer to its data is in use.
+ * Working with the internals of the collection item structure directly
+ * may cause problems in future if the internal implementation changes.
+ * If collection to search or property to find is NULL function returns NULL.
+ *
+ * Use \ref getitem "item management" functions to work with the item.
+ *
+ * @param[in]  ci               Collection object to traverse.
+ * @param[in]  subcollection    Name of the sub collection to find
+ *                              item in. If NULL, the top level collection
+ *                              is used. One can use "foo!bar!baz"
+ *                              notation to identify the sub collection.
+ * @param[in]  property_to_find Name of the property to find.
+ * @param[in]  type             Type filter. Only properties
+ *                              of the given type will match.
+ *                              Can be 0 to indicate that all
+ *                              types should be evaluated.
+ * @param[in]  idx              Index of the duplicate to find.
+ *                              0 - any first instance
+ *                              positive - N-th instance (index is 0-based)
+ *                              negative - last instance
+ * @param[in]  exact            If 0 then if index above is greater than
+ *                              actual number of duplicates the last duplicate
+ *                              if be returned.
+ *                              If non-zero the funtion will return ENOENT
+ *                              in case the index is greater than actual
+ *                              number of duplicates.
+ * @param[out]  item            Pointer to found item or NULL
+ *                              if item is not found.
+ * @return 0                    No errors.
+ * @return EINVAL               Invalid argument.
+ * @return ENOENT               Item is not found.
+ */
+int col_get_dup_item(struct collection_item *ci,
+                     const char *subcollection,
+                     const char *property_to_find,
+                     int type,
+                     int idx,
+                     int exact,
+                     struct collection_item **item);
+
+/**
  * @brief Sort collection.
  *
  * If the sub collections are included in sorting
@@ -2314,6 +2364,56 @@ int col_update_property(struct collection_item *ci,
  */
 #define COL_DSP_NDUP            7
 /**
+ * @brief Use last among nonsequential duplicates
+ *
+ * This mode applies to the list of duplicates that might be scattered
+ * across the collection
+ *
+ * For "insert":
+ * - Add property as the last dup of the given property.
+ *   The property name is taken from the item
+ *   and the value refprop is ignored.
+ *
+ * For "extract" or "delete":
+ * - Delete or extract the last duplicate of the property.
+ *   The property name is taken from the refprop.
+ *   Extracts or deletes last duplicate property in the uninterrupted
+ *   sequence of properties with the same name.
+ *   The property will be extracted or deleted if found
+ *   regardless of whether there are any duplicates or not.
+ */
+#define COL_DSP_LASTDUPNS        8
+/**
+ * @brief Use N-th among nonsequential duplicates
+ *
+ * This mode applies only to the list of duplicate
+ * properties that are going one after another.
+ *
+ * For "insert":
+ * - Add property as a N-th dup of the given property.
+ *   The property name is taken from the item
+ *   and the value refprop is ignored.
+ *   Index is zero based.
+ *   The COL_DSP_NDUPNS is used in case of the multi value property
+ *   to add a new property with the same name into specific place
+ *   in the list of properties with the same name.
+ *   The index of 0 will mean to add the property before the first
+ *   instance of the property with the same name.
+ *   If the property does not exist ENOENT will be returned.
+ *   If the index is greater than the last property with the same
+ *   name the item will be added immediately after last
+ *   property with the same name.
+ *
+ * For "extract" or "delete":
+ * - Delete or extract N-th duplicate property.
+ *   Index is zero based.
+ *   The property name is taken from the refprop.
+ *   If index is greater than number of duplicate
+ *   properties in the sequence ENOENT is returned.
+ *
+ */
+#define COL_DSP_NDUPNS           9
+/**
  * @}
  */
 
@@ -2524,7 +2624,9 @@ int col_compare_items(struct collection_item *first,
  *
  * If you want the data to remain unchanged use 0 as a length parameter.
  *
- * If item is a reference or a collection the call will return an error.
+ * If the item is a reference or a collection and you attempt to change
+ * the data, i.e. length is not 0, the call will return an error EINVAL.
+ * If the item is a reference or a collection it can only be renamed.
  *
  * The are several convenience function that are wrappers
  * around this function. For more information
@@ -2853,6 +2955,64 @@ int col_remove_item(struct collection_item *ci,
                     int idx,
                     int type);
 
+/**
+ * @brief Remove item from the collection.
+ *
+ * Function internally calls \ref col_extract_item and then
+ * \ref col_delete_item for the extracted item.
+ *
+ * Function is similar to \ref col_delete_property function
+ * but allows more specific information about what item (property)
+ * to remove.
+ *
+ * The header will not be considered for deletion.
+ *
+ * @param[in]  ci              Collection object.
+ * @param[in]  subcollection   Name of the sub collection to remove
+ *                             item from. If NULL, the top level collection
+ *                             is used. One can use "foo!bar!baz"
+ *                             notation to identify the sub collection.
+ * @param[in]  disposition     Constant that controls how the relative
+ *                             position of the item to remove is determined.
+ *                             For more information see \ref dispvalues
+ *                             "disposition constants".
+ * @param[in]  refprop         Name of the property to relate to.
+ *                             This can be used to specify that function
+ *                             should remove next item after the item
+ *                             with this name. Leave NULL if the
+ *                             disposition you are using does not
+ *                             relate to an item in the collection.
+ * @param[in]  idx             Index of the property to remove.
+ *                             Useful for multi-value properties where
+ *                             several properties have same name in a row.
+ * @param[in]  type            Type filter. Only the item of the matching
+ *                             type will be used. It can be a bit mask of
+ *                             more than one type. Use 0 if you do not
+ *                             need to filter by type.
+ * @param[in]  cb              Callback to use.
+ * @param[in]  custom_data     Caller defined data that can be passed
+ *                             to the callback.
+ *
+ * @return 0          - Item was successfully removed.
+ * @return ENOMEM     - No memory.
+ * @return EINVAL     - The value of some of the arguments is invalid.
+ * @return ENOENT     - Sub collection is not found.
+ *                      The position can't be determined. For example
+ *                      deleting next item after item with name "foo"
+ *                      will cause this error if item "foo" is the last
+ *                      item in the collection. There are other cases
+ *                      when this error can be returned but the common
+ *                      theme is that something was not found.
+ * @return ENOSYS       Unknown disposition value.
+ */
+int col_remove_item_with_cb(struct collection_item *ci,
+                            const char *subcollection,
+                            int disposition,
+                            const char *refprop,
+                            int idx,
+                            int type,
+                            col_item_cleanup_fn cb,
+                            void *custom_data);
 
 /**
  * @brief Remove item from the current collection.
@@ -3028,6 +3188,24 @@ int col_insert_item_into_current(struct collection_item *ci,
  *
  */
 void col_delete_item(struct collection_item *item);
+
+/**
+ * @brief Delete extracted item with callback.
+ *
+ * This function is similar to \ref col_delete_item but allows
+ * passing a callback function so that value stored in the collection can
+ * be properly distroyed.
+ *
+ * @param[in]  item            Item to delete.
+ * @param[in]  cb              Callback to use.
+ * @param[in]  custom_data     Caller defined data that can be passed
+                               to the callback.
+ *
+ */
+void col_delete_item_with_cb(struct collection_item *item,
+                             col_item_cleanup_fn cb,
+                             void *custom_data);
+
 
 /**
  * @}

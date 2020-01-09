@@ -135,3 +135,45 @@ global:
 local:
     *;
 };
+
+
+INI_CONFIG_1.2.0 {
+global:
+    /* ini_configobj.h */
+    ini_config_augment;
+
+    /* ini_comment.h */
+    ini_comment_construct;
+
+    /* ini_configmod.h */
+    ini_config_add_section;
+    ini_config_comment_section;
+    ini_config_rename_section;
+    ini_config_delete_section_by_name;
+    ini_config_delete_section_by_position;
+    ini_config_add_str_value;
+    ini_config_add_int_value;
+    ini_config_add_long_value;
+    ini_config_add_ulong_value;
+    ini_config_add_unsigned_value;
+    ini_config_add_int32_value;
+    ini_config_add_uint32_value;
+    ini_config_add_int64_value;
+    ini_config_add_uint64_value;
+    ini_config_add_double_value;
+    ini_config_add_bin_value;
+    ini_config_add_const_str_arr_value;
+    ini_config_add_str_arr_value;
+    ini_config_add_int_arr_value;
+    ini_config_add_long_arr_value;
+    ini_config_add_double_arr_value;
+    ini_config_delete_value;
+    ini_config_update_comment;
+    ini_config_file_backup;
+    ini_config_change_access;
+    ini_config_save;
+    ini_config_save_as;
+    ini_config_get_bom;
+    ini_config_set_bom;
+} INI_CONFIG_1.1.0;
+

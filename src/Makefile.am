@@ -69,8 +69,8 @@ libpath_utils_la_LDFLAGS = \
     -Wl,--version-script=$(top_srcdir)/path_utils/libpath_utils.sym
 
 if HAVE_CHECK
-    check_PROGRAMS += path_utils_ut
-    TESTS += path_utils_ut
+    check_PROGRAMS += path_utils_ut ini_configmod_ut_check
+    TESTS += path_utils_ut ini_configmod_ut_check
 endif
 
 path_utils_ut_SOURCES = path_utils/path_utils_ut.c
@@ -142,7 +142,7 @@ libcollection_la_SOURCES = \
     trace/trace.h
 libcollection_la_DEPENDENCIES = collection/libcollection.sym
 libcollection_la_LDFLAGS = \
-    -version-info 4:0:0 \
+    -version-info 5:0:1 \
     -Wl,--version-script=$(top_srcdir)/collection/libcollection.sym
 
 check_PROGRAMS += \
@@ -180,7 +180,7 @@ libref_array_la_SOURCES = \
     trace/trace.h
 libref_array_la_DEPENDENCIES = refarray/libref_array.sym
 libref_array_la_LDFLAGS = \
-    -version-info 3:0:2 \
+    -version-info 3:1:2 \
     -Wl,--version-script=$(top_srcdir)/refarray/libref_array.sym
 
 check_PROGRAMS += ref_array_ut
@@ -230,7 +230,9 @@ endif
 
 lib_LTLIBRARIES += libini_config.la
 dist_pkgconfig_DATA += ini/ini_config.pc
-dist_include_HEADERS += ini/ini_config.h ini/ini_configobj.h ini/ini_valueobj.h ini/ini_comment.h
+dist_include_HEADERS += ini/ini_config.h ini/ini_configobj.h \
+                        ini/ini_valueobj.h ini/ini_comment.h \
+                        ini/ini_configmod.h
 
 libini_config_la_SOURCES = \
     ini/ini_config.c \
@@ -251,10 +253,13 @@ libini_config_la_SOURCES = \
     ini/ini_fileobj.c \
     ini/ini_configobj.c \
     ini/ini_configobj.h \
+    ini/ini_configmod.h \
+    ini/ini_configmod.c \
     ini/ini_config_priv.h \
     ini/ini_get_valueobj.c \
     ini/ini_get_array_valueobj.c \
     ini/ini_list_valueobj.c \
+    ini/ini_augment.c \
     trace/trace.h
 EXTRA_libini_config_la_DEPENDENCIES = ini/libini_config.sym
 libini_config_la_LIBADD = \
@@ -263,7 +268,7 @@ libini_config_la_LIBADD = \
     libref_array.la \
     libbasicobjects.la
 libini_config_la_LDFLAGS = \
-    -version-info 5:0:0 \
+    -version-info 6:0:1 \
     -Wl,--version-script=$(top_srcdir)/ini/libini_config.sym
 
 dist_noinst_DATA += \
@@ -286,19 +291,33 @@ dist_noinst_DATA += \
     ini/ini.d/real32be.conf \
     ini/ini.d/real32le.conf \
     ini/ini.d/symbols.conf \
-    ini/ini.d/new_line.conf
+    ini/ini.d/new_line.conf \
+    ini/ini.d/merge.validator \
+    ini/ini2.d/real8.conf \
+    ini/ini2.d/real16be.conf \
+    ini/ini2.d/real16le.conf \
+    ini/ini2.d/real32be.conf \
+    ini/ini2.d/real32le.conf
+
 
 check_PROGRAMS += \
     ini_config_ut \
     ini_comment_ut \
     ini_valueobj_ut \
-    ini_parse_ut
+    ini_parse_ut \
+    ini_augment_ut \
+    ini_configmod_ut \
+    ini_save_ut
 
 TESTS += \
     ini_config_ut \
     ini_comment_ut \
     ini_valueobj_ut \
-    ini_parse_ut
+    ini_parse_ut \
+    ini_augment_ut \
+    ini_configmod_ut \
+    ini_save_ut
+
 
 ini_config_ut_SOURCES = ini/ini_config_ut.c
 ini_config_ut_LDADD = \
@@ -314,6 +333,25 @@ ini_valueobj_ut_LDADD = libini_config.la libbasicobjects.la
 ini_parse_ut_SOURCES = ini/ini_parse_ut.c
 ini_parse_ut_LDADD = libini_config.la libcollection.la libbasicobjects.la
 
+ini_augment_ut_SOURCES = ini/ini_augment_ut.c
+ini_augment_ut_LDADD = libini_config.la libcollection.la \
+                       libbasicobjects.la libpath_utils.la libref_array.la
+
+ini_configmod_ut_SOURCES = ini/ini_configmod_ut.c
+ini_configmod_ut_LDADD = libini_config.la libcollection.la \
+                         libbasicobjects.la libpath_utils.la libref_array.la
+
+ini_configmod_ut_check_SOURCES = ini/ini_configmod_ut_check.c
+ini_configmod_ut_check_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS)
+ini_configmod_ut_check_LDADD = libini_config.la libcollection.la \
+                               libbasicobjects.la libpath_utils.la \
+                               libref_array.la \
+                               $(CHECK_LIBS)
+
+ini_save_ut_SOURCES = ini/ini_save_ut.c
+ini_save_ut_LDADD = libini_config.la libcollection.la \
+                         libbasicobjects.la libpath_utils.la libref_array.la
+
 ini_config-docs:
 if HAVE_DOXYGEN
 	cd ini; \
@@ -324,6 +362,13 @@ clean-local-ini_config:
 	rm -f ./*.out
 	rm -f test.ini
 	rm -f ./foo.conf ./bom* #From ini_parse_ut
+	rm -f ./merge.validator.* #From ini_augment_ut
+	rm -f ./real.conf.manual
+	rm -f ./modtest.conf.real
+	rm -f ./modtest.conf.exp
+	rm -f ./test_*
+
+
 
 ##############################################################################
 # Additional rules

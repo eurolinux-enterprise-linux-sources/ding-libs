@@ -31,6 +31,7 @@
 #include "collection_priv.h"
 #include "collection.h"
 
+#define INTERRUPT(d) ((d == COL_DSP_LASTDUPNS) || (d == COL_DSP_NDUPNS)) ? 0 : 1
 
 /* Internal constants defined to denote actions that can be performed by find handler */
 #define COLLECTION_ACTION_FIND       1
@@ -173,9 +174,9 @@ static int col_validate_property(const char *property)
 
 
 /* Function that cleans the item with callback */
-static void col_delete_item_with_cb(struct collection_item *item,
-                                    col_item_cleanup_fn cb,
-                                    void *custom_data)
+void col_delete_item_with_cb(struct collection_item *item,
+                             col_item_cleanup_fn cb,
+                             void *custom_data)
 {
     struct collection_item *other_collection;
 
@@ -305,21 +306,28 @@ struct property_search {
     int found;
     int use_type;
     int type;
+    int interrupt;
+    int exact;
 };
 
 /* Find the parent of the item with given name */
-static int col_find_property(struct collection_item *collection,
-                             const char *refprop,
-                             int idx,
-                             int use_type,
-                             int type,
-                             struct collection_item **parent)
+static int col_find_property_sub(struct collection_item *collection,
+                                 const char *subcollection,
+                                 int interrupt,
+                                 const char *refprop,
+                                 int idx,
+                                 int exact,
+                                 int use_type,
+                                 int type,
+                                 struct collection_item **parent)
 {
     struct property_search ps;
     int i = 0;
     unsigned depth = 0;
+    struct collection_item *sub = NULL;
+    int error = EOK;
 
-    TRACE_FLOW_STRING("col_find_property", "Entry.");
+    TRACE_FLOW_ENTRY();
 
     *parent = NULL;
 
@@ -331,6 +339,8 @@ static int col_find_property(struct collection_item *collection,
     ps.found = 0;
     ps.use_type = use_type;
     ps.type = type;
+    ps.interrupt = interrupt;
+    ps.exact = exact;
 
     /* Create hash of the string to search */
     while(refprop[i] != 0) {
@@ -339,8 +349,35 @@ static int col_find_property(struct collection_item *collection,
         i++;
     }
 
+    /* Add item to collection */
+    if (subcollection == NULL) {
+        sub = collection;
+    }
+    else {
+        TRACE_INFO_STRING("Subcollection is not null, searching",
+                          subcollection);
+        error = col_find_item_and_do(collection, subcollection,
+                                     COL_TYPE_COLLECTIONREF,
+                                     COL_TRAVERSE_DEFAULT,
+                                     col_get_subcollection, (void *)(&sub),
+                                     COLLECTION_ACTION_FIND);
+        if (error) {
+            TRACE_ERROR_NUMBER("Search for subcollection returned error:",
+                                error);
+            /* Not found */
+            return 0;
+        }
+
+        if (sub == NULL) {
+            TRACE_ERROR_STRING("Search for subcollection returned NULL", "");
+            /* Not found */
+            return 0;
+        }
+
+    }
+
     /* We do not care about error here */
-    (void)col_walk_items(collection, COL_TRAVERSE_ONELEVEL,
+    (void)col_walk_items(sub, COL_TRAVERSE_ONELEVEL,
                          col_parent_traverse_handler,
                          (void *)parent, NULL, (void *)&ps,
                          &depth);
@@ -353,10 +390,90 @@ static int col_find_property(struct collection_item *collection,
 
     /* Item is not found */
     TRACE_FLOW_STRING("col_find_property", "Exit - item NOT found");
-    return EOK;
+    return 0;
+}
+
+/* Backward compatible wrapper */
+static int col_find_property(struct collection_item *collection,
+                             const char *refprop,
+                             int idx,
+                             int use_type,
+                             int type,
+                             struct collection_item **parent)
+{
+    int error = EOK;
+
+    TRACE_FLOW_ENTRY();
+
+    error = col_find_property_sub(collection,
+                                  NULL,
+                                  1,
+                                  refprop,
+                                  idx,
+                                  0,
+                                  use_type,
+                                  type,
+                                  parent);
+
+    TRACE_FLOW_RETURN(error);
+    return error;
 }
 
 
+
+/* Find a duplicate item */
+int col_get_dup_item(struct collection_item *ci,
+                     const char *subcollection,
+                     const char *property_to_find,
+                     int type,
+                     int idx,
+                     int exact,
+                     struct collection_item **item)
+{
+    int error = EOK;
+    struct collection_item *parent = NULL;
+
+    TRACE_FLOW_ENTRY();
+
+    if (!ci) {
+        TRACE_ERROR_STRING("Passed in collection is invalid", "");
+        return EINVAL;
+    }
+
+    if (!item) {
+        TRACE_ERROR_STRING("Result storage is invalid", "");
+        return EINVAL;
+    }
+
+    if (!property_to_find) {
+        TRACE_ERROR_STRING("Passed in property to find is NULL", "");
+        return EINVAL;
+    }
+
+    /* Find the corresponding duplicate item */
+    if (col_find_property_sub(ci,
+                              subcollection,
+                              0,
+                              property_to_find,
+                              idx,
+                              exact,
+                              (type == COL_TYPE_ANY) ? 0 : 1,
+                              type,
+                              &parent)) {
+        *item = parent->next;
+        /* function col_get_dup_item with big value of idx should
+         * return the last item with the same property name. */
+        if (strncmp(property_to_find,
+                    parent->next->property,
+                    parent->next->property_len) != 0) {
+            *item = parent;
+        }
+    }
+    else error = ENOENT;
+
+    TRACE_FLOW_EXIT();
+    return error;
+}
 
 /* Insert item into the current collection */
 int col_insert_item_into_current(struct collection_item *collection,
@@ -584,13 +701,25 @@ int col_insert_item_into_current(struct collection_item *collection,
     case COL_DSP_FIRSTDUP:
     case COL_DSP_LASTDUP:
     case COL_DSP_NDUP:
+    case COL_DSP_LASTDUPNS:
+    case COL_DSP_NDUPNS:
 
                             if (disposition == COL_DSP_FIRSTDUP) refindex = 0;
-                            else if (disposition == COL_DSP_LASTDUP) refindex = -1;
+                            else if ((disposition == COL_DSP_LASTDUP) ||
+                                     (disposition == COL_DSP_LASTDUPNS))
+                                        refindex = -1;
                             else refindex = idx;
 
                             /* We need to find property based on index */
-                            if (col_find_property(collection, item->property, refindex, 0, 0, &parent)) {
+                            if (col_find_property_sub(collection,
+                                                      NULL,
+                                                      INTERRUPT(disposition),
+                                                      item->property,
+                                                      refindex,
+                                                      0,
+                                                      0,
+                                                      0,
+                                                      &parent)) {
                                 item->next = parent->next;
                                 parent->next = item;
                                 header->count++;
@@ -764,13 +893,25 @@ int col_extract_item_from_current(struct collection_item *collection,
     case COL_DSP_FIRSTDUP:
     case COL_DSP_LASTDUP:
     case COL_DSP_NDUP:
+    case COL_DSP_LASTDUPNS:
+    case COL_DSP_NDUPNS:
 
                             if (disposition == COL_DSP_FIRSTDUP) refindex = 0;
-                            else if (disposition == COL_DSP_LASTDUP) refindex = -2;
+                            else if ((disposition == COL_DSP_LASTDUP) ||
+                                     (disposition == COL_DSP_LASTDUPNS))
+                                        refindex = -2;
                             else refindex = idx;
 
                             /* We need to find property based on index */
-                            if (col_find_property(collection, refprop, refindex, use_type, type, &parent)) {
+                            if (col_find_property_sub(collection,
+                                                      NULL,
+                                                      INTERRUPT(disposition),
+                                                      refprop,
+                                                      refindex,
+                                                      1,
+                                                      use_type,
+                                                      type,
+                                                      &parent)) {
                                 *ret_ref = parent->next;
                                 parent->next = (*ret_ref)->next;
                                 /* If we removed the last element adjust header */
@@ -861,18 +1002,20 @@ int col_extract_item(struct collection_item *collection,
 }
 
 
-/* Remove item (property) from collection.*/
-int col_remove_item(struct collection_item *ci,
-                    const char *subcollection,
-                    int disposition,
-                    const char *refprop,
-                    int idx,
-                    int type)
+/* Remove item (property) from collection with callback.*/
+int col_remove_item_with_cb(struct collection_item *ci,
+                            const char *subcollection,
+                            int disposition,
+                            const char *refprop,
+                            int idx,
+                            int type,
+                            col_item_cleanup_fn cb,
+                            void *custom_data)
 {
     int error = EOK;
     struct collection_item *ret_ref = NULL;
 
-    TRACE_FLOW_STRING("col_remove_item", "Exit");
+    TRACE_FLOW_STRING("col_remove_item", "Enter");
 
     /* Extract from the current collection */
     error = col_extract_item(ci,
@@ -887,10 +1030,28 @@ int col_remove_item(struct collection_item *ci,
         return error;
     }
 
-    col_delete_item(ret_ref);
+    col_delete_item_with_cb(ret_ref, cb, custom_data);
 
     TRACE_FLOW_STRING("col_remove_item", "Exit");
     return EOK;
+}
+
+/* Remove item (property) from collection.*/
+int col_remove_item(struct collection_item *ci,
+                    const char *subcollection,
+                    int disposition,
+                    const char *refprop,
+                    int idx,
+                    int type)
+{
+    return col_remove_item_with_cb(ci,
+                                   subcollection,
+                                   disposition,
+                                   refprop,
+                                   idx,
+                                   type,
+                                   NULL,
+                                   NULL);
 }
 
 /* Remove item (property) from current collection.
@@ -1588,8 +1749,8 @@ static int col_find_item_and_do(struct collection_item *ci,
 
     /* Make sure that there is anything to search */
     type &= COL_TYPE_ANY;
-    if ((type == 0) && 
-        ((property_to_find == NULL) || 
+    if ((type == 0) &&
+        ((property_to_find == NULL) ||
          ((property_to_find != NULL) && (*property_to_find == '\0')))) {
         TRACE_ERROR_NUMBER("No item search criteria specified - returning error!", ENOENT);
         return ENOENT;
@@ -1805,15 +1966,43 @@ static int col_parent_traverse_handler(struct collection_item *head,
         *((struct collection_item **)traverse_data) = previous;
     }
     else {
-        /* As soon as we found first non matching one but there was a match
-         * return the parent of the last found item.
-         */
-        if (((!match) || (current->next == NULL)) && (to_find->index != 0) && (to_find->found)) {
-            *stop = 1;
-            if (to_find->index == -2)
-                *((struct collection_item **)traverse_data) = to_find->parent;
-            else
-                *((struct collection_item **)traverse_data) = to_find->parent->next;
+        if (to_find->interrupt) {
+            /* As soon as we found first non matching one but there was a match
+             * return the parent of the last found item.
+             */
+            if (((!match) || (current->next == NULL)) &&
+                 (to_find->index != 0) && (to_find->found)) {
+                *stop = 1;
+                if (to_find->index == -2)
+                    *((struct collection_item **)traverse_data) =
+                                                 to_find->parent;
+                else
+                    if (to_find->exact) {
+                        /* This means that we need to match the exact
+                         * index but we did not */
+                        to_find->parent = NULL;
+                        to_find->found = 0;
+                    }
+                    else
+                        *((struct collection_item **)traverse_data) =
+                                                 to_find->parent->next;
+            }
+        }
+        else if ((current->next == NULL) && (to_find->found)) {
+                *stop = 1;
+                if (to_find->index == -2)
+                    *((struct collection_item **)traverse_data) =
+                                                 to_find->parent;
+                else
+                    if (to_find->exact) {
+                        /* This means that we need to match the exact
+                         * index but we did not */
+                        to_find->parent = NULL;
+                        to_find->found = 0;
+                    }
+                    else
+                        *((struct collection_item **)traverse_data) =
+                                                 to_find->parent->next;
         }
     }
 
@@ -2899,9 +3088,10 @@ int col_modify_item(struct collection_item *item,
 {
     TRACE_FLOW_STRING("col_modify_item", "Entry");
 
+    /* Allow renameing only */
     if ((item == NULL) ||
-        (item->type == COL_TYPE_COLLECTION) ||
-        (item->type == COL_TYPE_COLLECTIONREF)) {
+        ((item->type == COL_TYPE_COLLECTION) && (length != 0)) ||
+        ((item->type == COL_TYPE_COLLECTIONREF) && (length != 0))) {
         TRACE_ERROR_NUMBER("Invalid argument or invalid argument type", EINVAL);
         return EINVAL;
     }

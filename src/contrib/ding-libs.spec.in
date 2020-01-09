@@ -138,7 +138,7 @@ time properties
 %{_libdir}/libdhash.so
 %{_libdir}/pkgconfig/dhash.pc
 %doc dhash/README.dhash
-%doc dhash/examples/
+%doc dhash/examples/*.c
 
 
 ##############################################################################
@@ -173,8 +173,8 @@ and serialization
 %defattr(-,root,root,-)
 %doc COPYING
 %doc COPYING.LESSER
-%{_libdir}/libcollection.so.3
-%{_libdir}/libcollection.so.3.0.0
+%{_libdir}/libcollection.so.4
+%{_libdir}/libcollection.so.4.1.0
 
 %files -n libcollection-devel
 %defattr(-,root,root,-)
@@ -218,7 +218,7 @@ A dynamically-growing, reference-counted array
 %doc COPYING
 %doc COPYING.LESSER
 %{_libdir}/libref_array.so.1
-%{_libdir}/libref_array.so.1.2.0
+%{_libdir}/libref_array.so.1.2.1
 
 %files -n libref_array-devel
 %defattr(-,root,root,-)
@@ -302,8 +302,8 @@ structure
 %defattr(-,root,root,-)
 %doc COPYING
 %doc COPYING.LESSER
-%{_libdir}/libini_config.so.4
-%{_libdir}/libini_config.so.4.0.0
+%{_libdir}/libini_config.so.5
+%{_libdir}/libini_config.so.5.1.0
 
 %files -n libini_config-devel
 %defattr(-,root,root,-)
@@ -311,6 +311,7 @@ structure
 %{_includedir}/ini_configobj.h
 %{_includedir}/ini_valueobj.h
 %{_includedir}/ini_comment.h
+%{_includedir}/ini_configmod.h
 %{_libdir}/libini_config.so
 %{_libdir}/pkgconfig/ini_config.pc
 %doc ini/doc/html/

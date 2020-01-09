@@ -1,6 +1,6 @@
 Name: ding-libs
-Version: 0.4.0
-Release: 24%{?dist}
+Version: 0.5.0
+Release: 25%{?dist}
 Summary: "Ding is not GLib" assorted utility libraries
 Group: Development/Libraries
 License: LGPLv3+
@@ -14,9 +14,9 @@ BuildRoot: %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 %global path_utils_version 0.2.1
 %global dhash_version 0.4.3
 %global collection_version 0.6.2
-%global ref_array_version 0.1.4
+%global ref_array_version 0.1.5
 %global basicobjects_version 0.1.1
-%global ini_config_version 1.1.0
+%global ini_config_version 1.2.0
 
 ### Patches ###
 Patch0001: ding-libs-fake-soname.patch
@@ -308,6 +308,7 @@ structure
 %defattr(-,root,root,-)
 %{_includedir}/ini_config.h
 %{_includedir}/ini_comment.h
+%{_includedir}/ini_configmod.h
 %{_includedir}/ini_configobj.h
 %{_includedir}/ini_valueobj.h
 %{_libdir}/libini_config.so
@@ -356,6 +357,10 @@ rm -f */doc/html/installdox
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Tue Jun 23 2015 Jakub Hrozek <jhrozek@redhat.com> - 0.5.0.1-25
+- Resolves: rhbz#1205557 - Include the latest upstream ding-libs release in 7.2
+- Port the SONAME hack
+
 * Thu Sep 11 2014 Jakub Hrozek <jhrozek@redhat.com> - 0.4.0.1-24
 - Fix ABI breakage that affected gssproxy
 - Related: rhbz#1109856 - Rebase ding-libs to 0.4.0
