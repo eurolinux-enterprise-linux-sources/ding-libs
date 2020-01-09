@@ -19,10 +19,9 @@
     along with Collection Library.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-
+#include "config.h"
 #include <stdio.h>
 #include <string.h>
-#include <errno.h>
 #define TRACE_HOME
 #include "trace.h"
 #include "collection_queue.h"
@@ -38,7 +37,7 @@ int verbose = 0;
     } while(0)
 
 
-int queue_test(void)
+static int queue_test(void)
 {
     struct collection_item *queue = NULL;
     char binary_dump[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
@@ -97,7 +96,7 @@ int queue_test(void)
 }
 
 
-int empty_test(void)
+static int empty_test(void)
 {
     struct collection_item *queue = NULL;
     struct collection_item *item = NULL;

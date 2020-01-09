@@ -19,10 +19,8 @@
     along with INI Library.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define _GNU_SOURCE
-#include <stdio.h>
-#include <errno.h>
 #include "config.h"
+#include <stdio.h>
 /* For error text */
 #include <libintl.h>
 #define _(String) gettext (String)
@@ -31,7 +29,20 @@
 #include "collection.h"
 #include "collection_tools.h"
 #include "ini_defines.h"
-#include "ini_config.h"
+#include "ini_config_priv.h"
+#include "ini_configobj.h"
+
+/* Following declarations are from header file ini_config.h. This file was not
+ * included, because we don't want on include header file
+ * with old interface(ini_config.h) and new interface(ini_configobj.h)
+ * into the one file.
+ */
+void print_config_parsing_errors(FILE *file,
+                                 struct collection_item *error_set);
+
+
+void print_file_parsing_errors(FILE *file,
+                               struct collection_item *error_list);
 
 
 /*============================================================*/
@@ -42,6 +53,16 @@
  * check that the class IDs did not get reused over time by
  * other classes.
  */
+/**
+ * @brief Collection of error collections.
+ *
+ * When multiple files are read during one call
+ * each file has its own set of parsing errors
+ * and warnings. This is the collection
+ * of such sets.
+ */
+#define COL_CLASS_INI_PESET       COL_CLASS_INI_BASE + 3
+
 /** @brief Collection of grammar errors.
  *
  * Reserved for future use.
@@ -52,6 +73,37 @@
  * Reserved for future use.
  */
 #define COL_CLASS_INI_VERROR      COL_CLASS_INI_BASE + 6
+
+/**
+ * @}
+ */
+
+/**
+ * @defgroup gramerr Grammar errors and warnings
+ *
+ * Placeholder for now. Reserved for future use.
+ *
+ * @{
+ */
+#define ERR_MAXGRAMMAR      0
+/**
+ * @}
+ */
+
+/**
+ * @defgroup valerr Validation errors and warnings
+ *
+ * Placeholder for now. Reserved for future use.
+ *
+ * @{
+ */
+#define ERR_MAXVALID        0
+
+
+/**
+ * @}
+ */
+
 
 #ifdef HAVE_VALIDATION
 
@@ -66,7 +118,7 @@
 
 
 /* Function to return parsing error */
-const char *parsing_error_str(int parsing_error)
+static const char *parsing_error_str(int parsing_error)
 {
     const char *placeholder= _("Unknown pasing error.");
     const char *str_error[] = { _("Data is too long."),
@@ -75,7 +127,20 @@ const char *parsing_error_str(int parsing_error)
                                 _("Section name is too long."),
                                 _("Equal sign is missing."),
                                 _("Property name is missing."),
-                                _("Property name is too long.")
+                                _("Property name is too long."),
+                                _("Failed to read line."),
+                                _("Invalid space character at the "
+                                  "beginning of the line."),
+                                _("Duplicate key is not allowed."),
+                                _("Duplicate key is detected while "
+                                  "merging sections."),
+                                _("Duplicate section is not allowed."),
+                                _("Invalid character at the "
+                                  "beginning of the line."),
+                                _("Invalid tab character at the "
+                                  "beginning of the line."),
+                                _("Incomplete comment at the "
+                                  "end of the file.")
     };
 
     /* Check the range */
@@ -101,12 +166,12 @@ const char *parsing_error_str(int parsing_error)
  * This error is returned when the template
  * is translated into the grammar object.
  *
- * @param[in] parsing_error    Error code for the grammar error.
+ * @param[in] grammar_error    Error code for the grammar error.
  *
  * @return Error string.
  */
 
-const char *grammar_error_str(int grammar_error)
+static const char *grammar_error_str(int grammar_error)
 {
     const char *placeholder= _("Unknown grammar error.");
     /* THIS IS A TEMPORARY PLACEHOLDER !!!! */
@@ -143,11 +208,11 @@ const char *grammar_error_str(int grammar_error)
  * the INI file is validated against the
  * grammar object.
  *
- * @param[in] parsing_error    Error code for the validation error.
+ * @param[in] validation_error    Error code for the validation error.
  *
  * @return Error string.
  */
-const char *validation_error_str(int validation_error)
+static const char *validation_error_str(int validation_error)
 {
     const char *placeholder= _("Unknown validation error.");
     /* THIS IS A TEMPORARY PLACEHOLDER !!!! */
@@ -167,7 +232,30 @@ const char *validation_error_str(int validation_error)
             return str_error[validation_error-1];
 }
 
+/* Wrapper to print errors */
+const char *ini_get_error_str(int error, int family)
+{
+    const char *val;
+    TRACE_FLOW_ENTRY();
 
+    switch(family) {
+    case INI_FAMILY_PARSING:
+        val = parsing_error_str(error);
+        break;
+    case INI_FAMILY_VALIDATION:
+        val = validation_error_str(error);
+        break;
+    case INI_FAMILY_GRAMMAR:
+        val = grammar_error_str(error);
+        break;
+    default:
+        val = _("Unknown error category.");
+        break;
+    }
+
+    TRACE_FLOW_EXIT();
+    return val;
+}
 
 /* Internal function that prints errors */
 static void print_error_list(FILE *file,
@@ -177,12 +265,12 @@ static void print_error_list(FILE *file,
                              char *failed_to_process,
                              char *error_header,
                              char *line_format,
-                             error_fn error_function)
+                             int family)
 {
     struct collection_iterator *iterator;
     int error;
     struct collection_item *item = NULL;
-    struct parse_error *pe;
+    struct ini_parse_error *pe;
     unsigned int count;
 
     TRACE_FLOW_STRING("print_error_list", "Entry");
@@ -230,12 +318,13 @@ static void print_error_list(FILE *file,
         }
         else {
             /* Put error into provided format */
-            pe = (struct parse_error *)(col_get_item_data(item));
+            pe = (struct ini_parse_error *)(col_get_item_data(item));
             fprintf(file, line_format,
-                    col_get_item_property(item, NULL),      /* Error or warning */
-                    pe->error,                          /* Error */
-                    pe->line,                           /* Line */
-                    error_function(pe->error));         /* Error str */
+                    col_get_item_property(item, NULL), /* Error or warning */
+                    pe->error,                         /* Error */
+                    pe->line,                          /* Line */
+                    ini_get_error_str(pe->error,
+                                      family));        /* Error str */
         }
 
     }
@@ -257,15 +346,17 @@ void print_file_parsing_errors(FILE *file,
                      FAILED_TO_PROCCESS,
                      ERROR_HEADER,
                      LINE_FORMAT,
-                     parsing_error_str);
+                     INI_FAMILY_PARSING);
 }
 
 
+void print_grammar_errors(FILE *file,
+                          struct collection_item *error_list);
 /* Print errors and warnings that were detected while processing grammar.
  *
  * The following doxygen description is moved here.
  * When the function gets exposed move it into
- * the header file.
+ * the header file and remove prototype from this file.
  */
 /**
  * @brief Print errors and warnings that were detected while
@@ -287,14 +378,16 @@ void print_grammar_errors(FILE *file,
                      FAILED_TO_PROC_G,
                      ERROR_HEADER_G,
                      LINE_FORMAT,
-                     grammar_error_str);
+                     INI_FAMILY_GRAMMAR);
 }
 
+void print_validation_errors(FILE *file,
+                             struct collection_item *error_list);
 /* Print errors and warnings that were detected while validating INI file.
  *
  * The following doxygen description is moved here.
  * When the function gets exposed move it into
- * the header file.
+ * the header file and remove prototype from this file.
  */
 /**
  * @brief Print errors and warnings that were detected while
@@ -316,7 +409,7 @@ void print_validation_errors(FILE *file,
                      FAILED_TO_PROC_V,
                      ERROR_HEADER_V,
                      LINE_FORMAT,
-                     validation_error_str);
+                     INI_FAMILY_VALIDATION);
 }
 
 /* Print errors and warnings that were detected while parsing
@@ -384,4 +477,25 @@ void print_config_parsing_errors(FILE *file,
     col_unbind_iterator(iterator);
 
     TRACE_FLOW_STRING("print_config_parsing_errors", "Exit");
+}
+
+/* Function to print errors from the list */
+void ini_config_print_errors(FILE *file, char **error_list)
+{
+    unsigned count = 0;
+
+    TRACE_FLOW_ENTRY();
+
+    if (!error_list) {
+        TRACE_FLOW_STRING("List is empty.", "");
+        return;
+    }
+
+    while (error_list[count]) {
+        fprintf(file, "%s\n", error_list[count]);
+        count++;
+    }
+
+    TRACE_FLOW_EXIT();
+    return;
 }

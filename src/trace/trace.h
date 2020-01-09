@@ -6,14 +6,14 @@
     Copyright (C) Dmitri Pal <dpal@redhat.com> 2009
 
     This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
+    it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation; either version 3 of the License, or
     (at your option) any later version.
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-    You should have received a copy of the GNU General Public License
+    You should have received a copy of the GNU Lesser General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
@@ -112,6 +112,14 @@ extern unsigned trace_level;
         } \
     } while(0)
 
+#define TRACE_RETURN(flow, val)      \
+    do { \
+        char mstr[200]; \
+        sprintf(mstr, "%s returning:", __FUNCTION__); \
+        flow(mstr, val); \
+    } while(0)
+
+
 /* Assertion */
 #define TRACE_ASSERT(expression) expression ? : printf("ASSERTION FAILED\n")
 #else /* HAVE_TRACE */
@@ -123,6 +131,8 @@ extern unsigned trace_level;
 #define TRACE_LNUMBER(level, msg, num)
 #define TRACE_SLNUMBER(level, msg, num)
 #define TRACE_DOUBLE(level, msg, num)
+#define TRACE_RETURN(flow, val)
+#define TRACE_ASSERT(expression)
 #endif /* HAVE_TRACE */
 
 
@@ -155,5 +165,11 @@ extern unsigned trace_level;
 #define TRACE_FLOW_DOUBLE(msg, num)  TRACE_DOUBLE(TRACE_FLOW, msg, num)
 #define TRACE_ERROR_DOUBLE(msg, num) TRACE_DOUBLE(TRACE_ERROR, msg, num)
 #define TRACE_INFO_DOUBLE(msg, num)  TRACE_DOUBLE(TRACE_INFO, msg, num)
+
+/* Some other nice wrappers for function entry and exit */
+#define TRACE_FLOW_ENTRY()          TRACE_FLOW_STRING(__FUNCTION__, "Entry")
+#define TRACE_FLOW_EXIT()           TRACE_FLOW_STRING(__FUNCTION__, "Exit")
+#define TRACE_FLOW_RETURN(val)      TRACE_RETURN(TRACE_FLOW_NUMBER, val)
+
 
 #endif /* COMMON_TRACE_H */

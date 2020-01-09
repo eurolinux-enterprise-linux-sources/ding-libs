@@ -484,6 +484,59 @@ int col_create_collection(struct collection_item **ci,
 void col_destroy_collection(struct collection_item *ci);
 
 /**
+ * @brief Cleanup Callback
+ *
+ * Signature of the callback that needs to be used when
+ * the collection is destroyed and a special cleanup operation
+ * is required for items in the collection.
+ *
+ * @param[in]  property      The name of the property will
+ *                           be passed in this parameter.
+ * @param[in]  property_len  Length of the property name
+ *                           will be passed in this parameter.
+ * @param[in]  type          Type of the data will be passed
+ *                           in this parameter.
+ * @param[in]  data          Pointer to the data will be passed
+ *                           in this parameter.
+ * @param[in]  length        Length of data will be passed in
+ *                           this parameter.
+ * @param[in]  custom_data   Custom data will be passed in
+ *                           this parameter.
+ */
+
+typedef void (*col_item_cleanup_fn)(const char *property,
+                                    int property_len,
+                                    int type,
+                                    void *data,
+                                    int length,
+                                    void *custom_data);
+
+/**
+ * @brief Destroy a collection with callback
+ *
+ * Execute a provided callback for each item
+ * in the collection or subcollection immediately
+ * before freeing item. The callback is executed for each
+ * element including the collection header.
+ * It is the responsibility of the callback implementor
+ * to properly handle gifferent collection elements
+ * depending upon whether it is a header, reference to
+ * an embedded or external collection or a normal data
+ * element.
+ *
+ * The function will destroy a collection.
+ *
+ * @param[in] ci              Collection object.
+ * @param[in] cb              Cleanup callback.
+ * @param[in] custom_data     Application data passed into
+ *                            the cleanup callback.
+ *
+ */
+void col_destroy_collection_with_cb(struct collection_item *ci,
+                                    col_item_cleanup_fn cb,
+                                    void *custom_data);
+
+/**
  * @brief Copy item callback.
  *
  * Callback is used by the
@@ -618,7 +671,7 @@ int col_add_collection_to_collection(struct collection_item *ci,
  *                           in this parameter.
  * @param[in]  length        Length of data will be passed in
  *                           this parameter.
- * @param[in]  custom_dat    Custom data will be passed in
+ * @param[in]  custom_data   Custom data will be passed in
  *                           this parameter.
  * @param[out] stop          Pointer to a variable where the handler
  *                           can put nonzero to stop traversing
@@ -633,9 +686,8 @@ typedef int (*col_item_fn)(const char *property,
                            int type,
                            void *data,
                            int length,
-                           void *custom_dat,
+                           void *custom_data,
                            int *stop);
-
 
 /**
  * @brief Traverse collection
@@ -1719,7 +1771,7 @@ int col_insert_int_property(struct collection_item *ci,
                             int32_t number);
 
 /** @brief Insert an unsigned property. */
-int col_insert_unsinged_property(struct collection_item *ci,
+int col_insert_unsigned_property(struct collection_item *ci,
                                  const char *subcollection,
                                  int disposition,
                                  const char *refprop,
@@ -1804,7 +1856,7 @@ int col_insert_int_property_with_ref(struct collection_item *ci,
                                      struct collection_item **ret_ref);
 
 /** @brief Insert an unsigned property and get back a reference. */
-int col_insert_unsinged_property_with_ref(struct collection_item *ci,
+int col_insert_unsigned_property_with_ref(struct collection_item *ci,
                                           const char *subcollection,
                                           int disposition,
                                           const char *refprop,
@@ -2366,9 +2418,9 @@ int col_get_item_type(struct collection_item *ci);
 int col_get_item_length(struct collection_item *ci);
 
 /**
- * @brief Get property value from the item.
+ * @brief Get value from the item.
  *
- * Get property value from the item.
+ * Get value from the item.
  *
  * @param[in]  ci               Item to get value from.
  *                              If item is invalid the function
@@ -3157,9 +3209,6 @@ int col_get_item_depth(struct collection_iterator *iterator, int *depth);
  * It is a 20% comparison reduction.
  *
  * @param[in]  iterator   Iterator object to use.
- *
- * @return 0          - Success.
- * @return EINVAL     - The value of the argument is invalid.
  */
 void col_pin_iterator(struct collection_iterator *iterator);
 
@@ -3171,9 +3220,6 @@ void col_pin_iterator(struct collection_iterator *iterator);
  * \ref col_pin_iterator function.
  *
  * @param[in]  iterator   Iterator object to use.
- *
- * @return 0          - Success.
- * @return EINVAL     - The value of the argument is invalid.
  */
 void col_rewind_iterator(struct collection_iterator *iterator);
 

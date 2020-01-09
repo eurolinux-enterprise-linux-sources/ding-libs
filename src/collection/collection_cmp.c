@@ -19,13 +19,12 @@
     along with Collection Library.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define _GNU_SOURCE
+#include "config.h"
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <ctype.h>
 #include <time.h>
-#include "config.h"
 #include "trace.h"
 
 /* The collection should use the real structures */
@@ -86,7 +85,7 @@ int col_compare_items(struct collection_item *first,
         case COL_CMPIN_PROP_EQU: /* looking for exact match */
 
             /* Compare hashes and lengths first */
-            if ((first->phash == first->phash) &&
+            if ((first->phash == second->phash) &&
                 (first->property_len == second->property_len)) {
                 /* Collections are case insensitive, sorry... */
                 cmpres = strncasecmp(first->property,

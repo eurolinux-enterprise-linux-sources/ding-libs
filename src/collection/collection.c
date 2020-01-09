@@ -19,13 +19,12 @@
     along with Collection Library.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define _GNU_SOURCE
+#include "config.h"
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <ctype.h>
 #include <time.h>
-#include "config.h"
 #include "trace.h"
 
 /* The collection should use the real structures */
@@ -172,8 +171,11 @@ static int col_validate_property(const char *property)
     return invalid;
 }
 
-/* Function that cleans the item */
-void col_delete_item(struct collection_item *item)
+
+/* Function that cleans the item with callback */
+static void col_delete_item_with_cb(struct collection_item *item,
+                                    col_item_cleanup_fn cb,
+                                    void *custom_data)
 {
     struct collection_item *other_collection;
 
@@ -189,8 +191,16 @@ void col_delete_item(struct collection_item *item)
         /* Our data is a pointer to a whole external collection so dereference
          * it or delete */
         other_collection = *((struct collection_item **)(item->data));
-        col_destroy_collection(other_collection);
+        col_destroy_collection_with_cb(other_collection, cb, custom_data);
     }
+
+    /* Call the callback */
+    if (cb) cb(item->property,
+               item->property_len,
+               item->type,
+               item->data,
+               item->length,
+               custom_data);
 
     TRACE_INFO_STRING("Deleting property:", item->property);
     TRACE_INFO_NUMBER("Type:", item->type);
@@ -202,6 +212,18 @@ void col_delete_item(struct collection_item *item)
 
     TRACE_FLOW_STRING("col_delete_item","Exit.");
 }
+
+/* Function that cleans the item */
+void col_delete_item(struct collection_item *item)
+{
+    TRACE_FLOW_STRING("col_delete_item","Entry point.");
+
+    col_delete_item_with_cb(item, NULL, NULL);
+
+    TRACE_FLOW_STRING("col_delete_item","Exit.");
+}
+
+
 
 /* A generic function to allocate a property item */
 int col_allocate_item(struct collection_item **ci, const char *property,
@@ -447,7 +469,7 @@ int col_insert_item_into_current(struct collection_item *collection,
                                 TRACE_INFO_STRING("Property:", item->property);
                                 TRACE_INFO_NUMBER("Type:", item->type);
                                 if (col_find_property(collection, item->property, 0, 1, item->type, &parent)) {
-                                    TRACE_INFO_NUMBER("Current:", (unsigned)(parent->next));
+                                    TRACE_INFO_LNUMBER("Current:", parent->next);
                                     current = parent->next;
                                     parent->next = current->next;
                                     if (header->last == current) header->last = parent;
@@ -551,7 +573,7 @@ int col_insert_item_into_current(struct collection_item *collection,
                                 /* Move to the right position counting */
                                 while (idx > 0) {
                                     idx--;
-                                    parent = parent->next;
+                                    if (parent->next) parent = parent->next;
                                 }
                                 item->next = parent->next;
                                 parent->next = item;
@@ -1164,7 +1186,9 @@ static int col_get_subcollection(const char *property,
 /* Cleans the collection tree including current item. */
 /* The passed in variable should not be used after the call
  * as memory is freed!!! */
-static void col_delete_collection(struct collection_item *ci)
+static void col_delete_collection(struct collection_item *ci,
+                                  col_item_cleanup_fn cb,
+                                  void *custom_data)
 {
     TRACE_FLOW_STRING("col_delete_collection", "Entry.");
 
@@ -1177,10 +1201,10 @@ static void col_delete_collection(struct collection_item *ci)
     TRACE_INFO_STRING("Property", ci->property);
     TRACE_INFO_NUMBER("Next item", ci->next);
 
-    col_delete_collection(ci->next);
+    col_delete_collection(ci->next, cb, custom_data);
 
     /* Delete this item */
-    col_delete_item(ci);
+    col_delete_item_with_cb(ci, cb, custom_data);
     TRACE_FLOW_STRING("col_delete_collection", "Exit.");
 }
 
@@ -1492,9 +1516,10 @@ static int col_walk_items(struct collection_item *ci,
             return error;
         }
 
+        TRACE_INFO_NUMBER("Next element", current->next);
+
         parent = current;
         current = current->next;
-
     }
 
     TRACE_INFO_STRING("Out of loop", "");
@@ -1563,11 +1588,13 @@ static int col_find_item_and_do(struct collection_item *ci,
 
     /* Make sure that there is anything to search */
     type &= COL_TYPE_ANY;
-    if (((property_to_find == NULL) && (type == 0)) ||
-        ((*property_to_find == '\0') && (type == 0))) {
+    if ((type == 0) && 
+        ((property_to_find == NULL) || 
+         ((property_to_find != NULL) && (*property_to_find == '\0')))) {
         TRACE_ERROR_NUMBER("No item search criteria specified - returning error!", ENOENT);
         return ENOENT;
     }
+
     /* Prepare data for traversal */
     traverse_data = (struct find_name *)malloc(sizeof(struct find_name));
     if (traverse_data == NULL) {
@@ -2066,10 +2093,12 @@ static int col_copy_traverse_handler(struct collection_item *head,
         switch (traverse_data->mode) {
         case COL_COPY_NORMAL:
 
-            error = col_copy_collection(&other,
+            error = col_copy_collection_with_cb(&other,
                                         *((struct collection_item **)(current->data)),
                                         current->property,
-                                        COL_COPY_NORMAL);
+                                        COL_COPY_NORMAL,
+                                        traverse_data->copy_cb,
+                                        traverse_data->ext_data);
             if (error) {
                 TRACE_ERROR_NUMBER("Copy subcollection returned error:", error);
                 return error;
@@ -2235,11 +2264,13 @@ int col_create_collection(struct collection_item **ci, const char *name,
 /* DESTROY */
 
 /* Function that destroys a collection */
-void col_destroy_collection(struct collection_item *ci)
+void col_destroy_collection_with_cb(struct collection_item *ci,
+                                    col_item_cleanup_fn cb,
+                                    void *custom_data)
 {
     struct collection_header *header;
 
-    TRACE_FLOW_STRING("col_destroy_collection", "Entry.");
+    TRACE_FLOW_STRING("col_destroy_collection_with_cb", "Entry.");
 
     /* Do not try to delete NULL */
     if (ci == NULL) return;
@@ -2263,12 +2294,22 @@ void col_destroy_collection(struct collection_item *ci)
                           header->reference_count);
     }
     else {
-        col_delete_collection(ci);
+        col_delete_collection(ci, cb, custom_data);
     }
+
+    TRACE_FLOW_STRING("col_destroy_collection_with_cb", "Exit.");
+}
+
+
+/* Function that destroys a collection */
+void col_destroy_collection(struct collection_item *ci)
+{
+    TRACE_FLOW_STRING("col_destroy_collection", "Entry.");
+
+    col_destroy_collection_with_cb(ci, NULL, NULL);
 
     TRACE_FLOW_STRING("col_destroy_collection", "Exit.");
 }
-
 
 /* COPY */
 

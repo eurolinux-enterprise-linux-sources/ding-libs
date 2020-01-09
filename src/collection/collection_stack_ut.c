@@ -19,10 +19,9 @@
     along with Collection Library.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-
+#include "config.h"
 #include <stdio.h>
 #include <string.h>
-#include <errno.h>
 #define TRACE_HOME
 #include "trace.h"
 #include "collection_stack.h"
@@ -39,7 +38,7 @@ int verbose = 0;
 
 
 
-int stack_test(void)
+static int stack_test(void)
 {
     struct collection_item *stack = NULL;
     char binary_dump[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8 };

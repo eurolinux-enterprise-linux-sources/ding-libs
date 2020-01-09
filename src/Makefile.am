@@ -8,7 +8,13 @@ builddir ?= .
 dist_noinst_DATA = \
     m4 \
     COPYING \
-    COPYING.LESSER
+    COPYING.LESSER \
+    path_utils/libpath_utils.sym \
+    dhash/libdhash.sym \
+    collection/libcollection.sym \
+    refarray/libref_array.sym \
+    basicobjects/libbasicobjects.sym \
+    ini/libini_config.sym
 
 ##############################################################################
 # Common
@@ -17,7 +23,8 @@ AM_CFLAGS =
 if HAVE_GCC
     AM_CFLAGS += \
         -Wall -Wshadow -Wstrict-prototypes -Wpointer-arith -Wcast-qual \
-        -Wcast-align -Wwrite-strings
+        -Wcast-align -Wwrite-strings -Wextra -Wno-unused-parameter \
+        -Wno-sign-compare -Wformat-security -Wmissing-prototypes -Wundef
 endif
 
 AM_CPPFLAGS = \
@@ -26,6 +33,7 @@ AM_CPPFLAGS = \
     -I$(srcdir)/refarray \
     -I$(srcdir)/dhash \
     -I$(srcdir)/ini \
+    -I$(srcdir)/basicobjects \
     -I$(srcdir) \
     -I$(srcdir)/trace \
     $(TRACE_LEVEL)
@@ -55,8 +63,10 @@ dist_pkgconfig_DATA += path_utils/path_utils.pc
 dist_include_HEADERS += path_utils/path_utils.h
 
 libpath_utils_la_SOURCES = path_utils/path_utils.c
+libpath_utils_la_DEPENDENCIES = path_utils/libpath_utils.sym
 libpath_utils_la_LDFLAGS = \
-    -version-info 1:0:0
+    -version-info 1:1:0 \
+    -Wl,--version-script=$(top_srcdir)/path_utils/libpath_utils.sym
 
 if HAVE_CHECK
     check_PROGRAMS += path_utils_ut
@@ -88,8 +98,10 @@ dist_pkgconfig_DATA += dhash/dhash.pc
 dist_include_HEADERS += dhash/dhash.h
 
 libdhash_la_SOURCES = dhash/dhash.c
+libdhash_la_DEPENDENCIES = dhash/libdhash.sym
 libdhash_la_LDFLAGS = \
-    -version-info 1:0:0
+    -version-info 1:2:0 \
+    -Wl,--version-script=$(top_srcdir)/dhash/libdhash.sym
 
 check_PROGRAMS += dhash_test dhash_example
 TESTS += dhash_test dhash_example
@@ -128,8 +140,10 @@ libcollection_la_SOURCES = \
     collection/collection_iter.c \
     collection/collection_priv.h \
     trace/trace.h
+libcollection_la_DEPENDENCIES = collection/libcollection.sym
 libcollection_la_LDFLAGS = \
-    -version-info 2:0:0
+    -version-info 4:0:0 \
+    -Wl,--version-script=$(top_srcdir)/collection/libcollection.sym
 
 check_PROGRAMS += \
     collection_ut \
@@ -164,8 +178,10 @@ dist_include_HEADERS += refarray/ref_array.h
 libref_array_la_SOURCES = \
     refarray/ref_array.c \
     trace/trace.h
+libref_array_la_DEPENDENCIES = refarray/libref_array.sym
 libref_array_la_LDFLAGS = \
-    -version-info 1:0:0
+    -version-info 3:0:2 \
+    -Wl,--version-script=$(top_srcdir)/refarray/libref_array.sym
 
 check_PROGRAMS += ref_array_ut
 TESTS += ref_array_ut
@@ -181,12 +197,40 @@ if HAVE_DOXYGEN
 endif
 
 ##############################################################################
+# basicobjects
+##############################################################################
+
+lib_LTLIBRARIES += libbasicobjects.la
+dist_pkgconfig_DATA += basicobjects/basicobjects.pc
+dist_include_HEADERS += basicobjects/simplebuffer.h
+
+libbasicobjects_la_SOURCES = \
+    basicobjects/simplebuffer.c \
+    trace/trace.h
+libbasicobjects_la_DEPENDENCIES = basicobjects/libbasicobjects.sym
+libbasicobjects_la_LDFLAGS = \
+    -version-info 1:0:1 \
+    -Wl,--version-script=$(top_srcdir)/basicobjects/libbasicobjects.sym
+
+check_PROGRAMS += simplebuffer_ut
+TESTS += simplebuffer_ut
+simplebuffer_ut_SOURCES = basicobjects/simplebuffer_ut.c
+simplebuffer_ut_LDADD = libbasicobjects.la
+
+basicobjects-docs:
+if HAVE_DOXYGEN
+	cd basicobjects; \
+	$(DOXYGEN) basicobjects.cfg.doxy
+endif
+
+
+##############################################################################
 # ini_config
 ##############################################################################
 
 lib_LTLIBRARIES += libini_config.la
 dist_pkgconfig_DATA += ini/ini_config.pc
-dist_include_HEADERS += ini/ini_config.h
+dist_include_HEADERS += ini/ini_config.h ini/ini_configobj.h ini/ini_valueobj.h ini/ini_comment.h
 
 libini_config_la_SOURCES = \
     ini/ini_config.c \
@@ -196,39 +240,90 @@ libini_config_la_SOURCES = \
     ini/ini_list.c \
     ini/ini_print.c \
     ini/ini_parse.c \
-    ini/ini_parse.h \
     ini/ini_metadata.c \
     ini/ini_metadata.h \
     ini/ini_defines.h \
     ini/ini_comment.c \
     ini/ini_comment.h \
+    ini/ini_valueobj.c \
+    ini/ini_valueobj.h \
+    ini/ini_serialize.c \
+    ini/ini_fileobj.c \
+    ini/ini_configobj.c \
+    ini/ini_configobj.h \
+    ini/ini_config_priv.h \
+    ini/ini_get_valueobj.c \
+    ini/ini_get_array_valueobj.c \
+    ini/ini_list_valueobj.c \
     trace/trace.h
+EXTRA_libini_config_la_DEPENDENCIES = ini/libini_config.sym
 libini_config_la_LIBADD = \
     libcollection.la \
     libpath_utils.la \
-    libref_array.la
+    libref_array.la \
+    libbasicobjects.la
 libini_config_la_LDFLAGS = \
-    -version-info 2:0:0
+    -version-info 5:0:0 \
+    -Wl,--version-script=$(top_srcdir)/ini/libini_config.sym
 
 dist_noinst_DATA += \
     ini/ini.conf \
     ini/ini.d/real.conf \
-    ini/ini.d/test.conf
+    ini/ini.d/test.conf \
+    ini/ini.d/ipa.conf \
+    ini/ini.d/foo.conf.in \
+    ini/ini.d/mysssd.conf \
+    ini/ini.d/smerge.conf \
+    ini/ini.d/sexpect.conf \
+    ini/ini.d/first.conf \
+    ini/ini.d/second.conf \
+    ini/ini.d/space.conf \
+    ini/ini.d/mergecheck.conf \
+    ini/ini.d/comment.conf \
+    ini/ini.d/real8.conf \
+    ini/ini.d/real16be.conf \
+    ini/ini.d/real16le.conf \
+    ini/ini.d/real32be.conf \
+    ini/ini.d/real32le.conf \
+    ini/ini.d/symbols.conf \
+    ini/ini.d/new_line.conf
 
-check_PROGRAMS += ini_config_ut ini_comment_ut
-TESTS += ini_config_ut ini_comment_ut
+check_PROGRAMS += \
+    ini_config_ut \
+    ini_comment_ut \
+    ini_valueobj_ut \
+    ini_parse_ut
+
+TESTS += \
+    ini_config_ut \
+    ini_comment_ut \
+    ini_valueobj_ut \
+    ini_parse_ut
+
 ini_config_ut_SOURCES = ini/ini_config_ut.c
 ini_config_ut_LDADD = \
     libini_config.la \
     libcollection.la
+
 ini_comment_ut_SOURCES = ini/ini_comment_ut.c
 ini_comment_ut_LDADD = libini_config.la
+
+ini_valueobj_ut_SOURCES = ini/ini_valueobj_ut.c
+ini_valueobj_ut_LDADD = libini_config.la libbasicobjects.la
+
+ini_parse_ut_SOURCES = ini/ini_parse_ut.c
+ini_parse_ut_LDADD = libini_config.la libcollection.la libbasicobjects.la
 
 ini_config-docs:
 if HAVE_DOXYGEN
 	cd ini; \
 	$(DOXYGEN) ini_config.cfg.doxy
 endif
+
+clean-local-ini_config:
+	rm -f ./*.out
+	rm -f test.ini
+	rm -f ./foo.conf ./bom* #From ini_parse_ut
 
 ##############################################################################
 # Additional rules
@@ -270,13 +365,13 @@ if GIT_CHECKOUT
 prerelease-srpm:
 	cp $(srcdir)/version.m4 $(srcdir)/version.m4.orig
 	sed -e "s/m4_define(\[PRERELEASE_VERSION_NUMBER\], \[.*\])/m4_define(\[PRERELEASE_VERSION_NUMBER\], \[.`date +%Y%m%d%H`git`git log -1 --pretty=format:%h`\])/" < $(srcdir)/version.m4.orig > $(srcdir)/version.m4
-	$(MAKE) srpms
+	$(MAKE) srpm
 	mv $(srcdir)/version.m4.orig $(srcdir)/version.m4
 endif
 
 tests: all $(check_PROGRAMS)
 
-docs: path_utils-docs collection-docs ref_array-docs ini_config-docs
+docs: path_utils-docs collection-docs ref_array-docs ini_config-docs basicobjects-docs
 
-clean-local:
+clean-local: clean-local-ini_config
 	rm -Rf doc

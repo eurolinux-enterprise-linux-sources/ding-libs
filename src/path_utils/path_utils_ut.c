@@ -20,7 +20,7 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define _GNU_SOURCE /* asprintf */
+#include "config.h"
 
 #include <check.h>
 #include <stdlib.h>
@@ -229,6 +229,15 @@ START_TEST(test_path_concat)
     fail_unless(path_concat(p, PATH_MAX, "", "foo") == SUCCESS);
     fail_unless_str_equal(p, "foo");
 
+    fail_unless(path_concat(p, PATH_MAX, "/", "foo") == SUCCESS);
+    fail_unless_str_equal(p, "/foo");
+
+    fail_unless(path_concat(p, PATH_MAX, "/foo", "/") == SUCCESS);
+    fail_unless_str_equal(p, "/foo/");
+
+    fail_unless(path_concat(p, PATH_MAX, "/foo", "bar/") == SUCCESS);
+    fail_unless_str_equal(p, "/foo/bar/");
+
     fail_unless(path_concat(p, PATH_MAX, NULL, "foo") == SUCCESS);
     fail_unless_str_equal(p, "foo");
 
@@ -241,16 +250,37 @@ END_TEST
 START_TEST(test_path_concat_neg)
 {
     char small[3];
-    char small2[4];
-    char p2[8];
+    char small2[5];
+    char small3[7];
+    char p2[10];
 
     /* these two test different conditions */
+
+    /* Test if head is longer than the buffer */
     fail_unless(path_concat(small, 3, "/foo", "bar") == ENOBUFS);
-    fail_unless(path_concat(small2, 4, "/foo", "bar") == ENOBUFS);
+    /* On ENOBUFS, path should be empty */
+    fail_unless_str_equal(small, "");
+
+    /* Test if head is the same length as the buffer */
+    fail_unless(path_concat(small2, 5, "/foo", "bar") == ENOBUFS);
+    /* On ENOBUFS, path should be empty */
+    fail_unless_str_equal(small2, "");
+
+    /* Test if head+tail is the longer than the buffer */
+    fail_unless(path_concat(small3, 7, "/foo", "bar") == ENOBUFS);
+    /* On ENOBUFS, path should be empty */
+    fail_unless_str_equal(small3, "");
 
     /* off-by-one */
+    /* Fill with garbage data for now */
+    memset(p2, 'Z', 9);
+    p2[9] = '\0';
+
     fail_unless(path_concat(p2, 8, "/foo", "bar") == ENOBUFS);
-    fail_unless_str_equal(p2, "/foo/bar");
+    /* Make sure we don't write past the end of the buffer */
+    fail_unless(p2[8] == 'Z', "Got [%d]", p2[8]);
+    /* On ENOBUFS, path should be empty */
+    fail_unless_str_equal(p2, "");
 }
 END_TEST
 
@@ -350,53 +380,67 @@ START_TEST(test_split_path)
     array = split_path("/foo/bar", &n);
     fail_if(array == NULL);
     fail_unless(n == 3);
-    fail_unless_str_equal(array[0], "/");
-    fail_unless_str_equal(array[1], "foo");
-    fail_unless_str_equal(array[2], "bar");
-    free(array);
+    if (array) {
+        fail_unless_str_equal(array[0], "/");
+        fail_unless_str_equal(array[1], "foo");
+        fail_unless_str_equal(array[2], "bar");
+        free(array);
+    }
 
     array = split_path("/foo/../bar", &n);
     fail_if(array == NULL);
     fail_unless(n == 4);
-    fail_unless_str_equal(array[0], "/");
-    fail_unless_str_equal(array[1], "foo");
-    fail_unless_str_equal(array[2], "..");
-    fail_unless_str_equal(array[3], "bar");
-    free(array);
+    if (array) {
+        fail_unless_str_equal(array[0], "/");
+        fail_unless_str_equal(array[1], "foo");
+        fail_unless_str_equal(array[2], "..");
+        fail_unless_str_equal(array[3], "bar");
+        free(array);
+    }
 
     array = split_path("/foo/bar", NULL);
     fail_if(array == NULL);
-    fail_unless_str_equal(array[0], "/");
-    fail_unless_str_equal(array[1], "foo");
-    fail_unless_str_equal(array[2], "bar");
-    free(array);
+    if (array) {
+        fail_unless_str_equal(array[0], "/");
+        fail_unless_str_equal(array[1], "foo");
+        fail_unless_str_equal(array[2], "bar");
+        free(array);
+    }
 
     array = split_path("foo/bar", &n);
     fail_if(array == NULL);
     fail_unless(n == 2);
-    fail_unless_str_equal(array[0], "foo");
-    fail_unless_str_equal(array[1], "bar");
-    free(array);
+    if (array) {
+        fail_unless_str_equal(array[0], "foo");
+        fail_unless_str_equal(array[1], "bar");
+        free(array);
+    }
 
     array = split_path(".", &n);
     fail_if(array == NULL);
     fail_unless(n == 1);
-    fail_unless_str_equal(array[0], ".");
-    free(array);
+    if (array) {
+        fail_unless_str_equal(array[0], ".");
+        free(array);
+    }
 
     array = split_path("foo", &n);
     fail_if(array == NULL);
     fail_unless(n == 1);
-    fail_unless_str_equal(array[0], "foo");
-    free(array);
+    if (array) {
+        fail_unless_str_equal(array[0], "foo");
+        free(array);
+    }
 
     /* one might expect { "" } or outright NULL, but we agreed not to
      * do changes beyond bugfixes at this point */
     array = split_path("", &n);
     fail_if(array == NULL);
     fail_unless(n == 0);
-    fail_unless(array[0] == NULL);
-    free(array);
+    if (array) {
+        fail_unless(array[0] == NULL);
+        free(array);
+    }
 }
 END_TEST
 
@@ -536,13 +580,14 @@ START_TEST(test_find_existing_directory_ancestor_neg)
 END_TEST
 
 /**** directory_list ****/
-void setup_directory_list(void)
+static void setup_directory_list(void)
 {
     char *s = NULL;
     int ret;
 
     s = strdup(DIR_TEMPLATE);
     fail_unless(s != NULL, "strdup failed\n");
+    if (!s) return;
     dlist_dir = mkdtemp(s);
     fail_unless(dlist_dir != NULL, "mkstemp failed [%d][%s]", errno, strerror(errno));
 
@@ -557,7 +602,7 @@ void setup_directory_list(void)
     fail_unless(ret != -1, "mkdir %s failed [%d][%s]", dlist_subsubdir, errno, strerror(errno));
 }
 
-void teardown_directory_list(void)
+static void teardown_directory_list(void)
 {
     int ret;
 
@@ -583,9 +628,11 @@ void teardown_directory_list(void)
     }
 }
 
-bool dirlist_cb_nonrecursive(const char *directory, const char *base_name,
-                             const char *path, struct stat *info,
-                             void *user_data)
+static bool dirlist_cb_nonrecursive(const char *directory,
+                                    const char *base_name,
+                                    const char *path,
+                                    struct stat *info,
+                                    void *user_data)
 {
     int *data = (int *) user_data;
 
@@ -595,9 +642,9 @@ bool dirlist_cb_nonrecursive(const char *directory, const char *base_name,
     return true;
 }
 
-bool dirlist_cb_recursive(const char *directory, const char *base_name,
-                          const char *path, struct stat *info,
-                          void *user_data)
+static bool dirlist_cb_recursive(const char *directory, const char *base_name,
+                                 const char *path, struct stat *info,
+                                 void *user_data)
 {
     bool *seen_child = (bool *) user_data;
     static bool seen_parent = false;
@@ -653,7 +700,7 @@ START_TEST(test_is_ancestor_path)
 END_TEST
 
 
-Suite *path_utils_suite(void)
+static Suite *path_utils_suite(void)
 {
     Suite *s = suite_create("path_utils");
 

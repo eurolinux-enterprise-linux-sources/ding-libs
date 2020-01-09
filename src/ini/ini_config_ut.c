@@ -19,6 +19,7 @@
     along with INI Library.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "config.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -41,7 +42,7 @@ int verbose = 0;
     } while(0)
 
 
-int basic_test(void)
+static int basic_test(void)
 {
     int error;
     struct collection_item *ini_config = NULL;
@@ -83,7 +84,7 @@ int basic_test(void)
     return 0;
 }
 
-int single_file(void)
+static int single_file(void)
 {
     int error;
     struct collection_item *ini_config = NULL;
@@ -188,7 +189,7 @@ int single_file(void)
     return 0;
 }
 
-int single_fd(void)
+static int single_fd(void)
 {
     int error;
     struct collection_item *ini_config = NULL;
@@ -305,7 +306,7 @@ int single_fd(void)
     return 0;
 }
 
-int negative_test(void)
+static int negative_test(void)
 {
     int error;
     unsigned int count;
@@ -373,7 +374,7 @@ int negative_test(void)
 
 }
 
-int real_test(const char *file)
+static int real_test(const char *file)
 {
     int error;
     struct collection_item *ini_config = NULL;
@@ -455,7 +456,7 @@ int real_test(const char *file)
     return 0;
 }
 
-int get_test(void)
+static int get_test(void)
 {
 
     int error;
@@ -467,7 +468,7 @@ int get_test(void)
     double number_double;
     unsigned number_unsigned;
     unsigned long number_ulong;
-    unsigned char logical;
+    unsigned char logical = 0;
     char *str;
     const char *cstr;
     const char *cstrn;
@@ -637,7 +638,6 @@ int get_test(void)
     COLOUT(printf("Convert item to number without strict conversion.\n"));
 
     error = 0;
-    number = 1;
     number = get_int_config_value(item, 0, 10, &error);
     if (error) {
         /* We expected error in this case */
@@ -779,7 +779,7 @@ int get_test(void)
     error = 0;
     logical = get_bool_config_value(item, 1, &error);
     if (!error) {
-        printf("Expect error. Got success.\n");
+        printf("Expect error. Got success. Value %d\n", (int) logical);
         free_ini_config(ini_config);
         return -1;
     }
@@ -945,6 +945,48 @@ int get_test(void)
     COLOUT(for (i=0;i<size;i++) printf("[%s]\n",*(strarray + i)));
 
     free_string_config_array(strarray);
+
+    /**********************************************************/
+
+    COLOUT(printf("Get bad string array \n"));
+
+    item = NULL;
+    error = get_config_item("domains", "badarray", ini_config, &item);
+    if(error) {
+        printf("Expected success but got error! %d\n",error);
+        free_ini_config(ini_config);
+        return error;
+    }
+
+    /* Item should be found */
+    if (item == NULL) {
+        printf("Expected success but got NULL.\n");
+        free_ini_config(ini_config);
+        return -1;
+    }
+
+    COLOUT(col_debug_item(item));
+
+    COLOUT(printf("Get bad str array without size.\n"));
+
+    error = 0;
+    strarray = get_string_config_array(item, ",", NULL, &error);
+    if (error) {
+        printf("Expect success got error %d.\n", error);
+        free_ini_config(ini_config);
+        return error;
+    }
+
+    /* Can be used with this cycle */
+    strptr = strarray;
+    while (*strptr != NULL) {
+        COLOUT(printf("[%s]\n",*strptr));
+        strptr++;
+    }
+
+    free_string_config_array(strarray);
+
+    /**********************************************************/
 
     COLOUT(printf("Get long array item\n"));
 
@@ -1256,7 +1298,7 @@ int get_test(void)
  * and one needs to parse the configuration file
  * for the first time and load configuration
  */
-int startup_test(void)
+static int startup_test(void)
 {
     int error;
     struct collection_item *ini_config = NULL;
@@ -1375,7 +1417,7 @@ int startup_test(void)
     return 0;
 }
 
-int reload_test(void)
+static int reload_test(void)
 {
 
     int error;
@@ -1504,6 +1546,8 @@ int main(int argc, char *argv[])
     int error = EOK;
     char *srcdir = NULL;
     char *rundir = NULL;
+    const char inidir[] = "/ini";
+    int len = 0;
 
     if ((argc > 1) && (strcmp(argv[1], "-v") == 0)) verbose = 1;
 
@@ -1511,18 +1555,31 @@ int main(int argc, char *argv[])
 
     srcdir = getenv("srcdir");
     if(srcdir) {
-        rundir = malloc(strlen(srcdir)+4*sizeof(char));
-        sprintf(rundir, "%s/ini", srcdir);
+
+        len = strlen(srcdir) + sizeof(inidir);
+        rundir = malloc(len);
+        if (!rundir) {
+            printf("Failed to allocate memory to store path"
+                   " to the test files %d.\n", ENOMEM);
+            return -1;
+        }
+
+        snprintf(rundir, len, "%s%s", srcdir, inidir);
+
+        errno = 0;
         if(chdir(rundir) != 0) {
             error = errno;
+            free(rundir);
             printf("Failed to change directory, error %d\n", error);
             return error;
         }
+        free(rundir);
     }
 
     if ((error = basic_test()) ||
         (error = single_file()) ||
         (error = single_fd()) ||
+        (error = negative_test()) ||
         (error = real_test(NULL)) ||
          /* This should result in merged configuration */
         (error = real_test("./ini.conf")) ||

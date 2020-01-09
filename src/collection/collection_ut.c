@@ -19,7 +19,7 @@
     along with Collection Library.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-
+#include "config.h"
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -39,7 +39,7 @@ int verbose = 0;
 
 
 
-int ref_collection_test(void)
+static int ref_collection_test(void)
 {
     struct collection_item *peer = NULL;
     struct collection_item *socket = NULL;
@@ -131,7 +131,7 @@ int ref_collection_test(void)
 }
 
 
-int single_collection_test(void)
+static int single_collection_test(void)
 {
     struct collection_item *handle = NULL;
     int error = EOK;
@@ -192,7 +192,7 @@ int single_collection_test(void)
     return error;
 }
 
-int add_collection_test(void)
+static int add_collection_test(void)
 {
     struct collection_item *peer = NULL;
     struct collection_item *socket = NULL;
@@ -250,9 +250,9 @@ int add_collection_test(void)
     return error;
 }
 
-int copy_cb(struct collection_item *item,
-            void *ext_data,
-            int *skip)
+static int copy_cb(struct collection_item *item,
+                   void *ext_data,
+                   int *skip)
 {
     COLOUT(printf("INSIDE Copy Callback\n"));
     COLOUT(col_debug_item(item));
@@ -262,7 +262,7 @@ int copy_cb(struct collection_item *item,
 }
 
 
-int mixed_collection_test(void)
+static int mixed_collection_test(void)
 {
     struct collection_item *peer;
     struct collection_item *socket1;
@@ -390,6 +390,7 @@ int mixed_collection_test(void)
         col_destroy_collection(host);
         col_destroy_collection(socket1);
         col_destroy_collection(socket2);
+        col_destroy_collection(event);
         printf("Failed to add collections. Error %d\n", error);
         return error;
     }
@@ -405,6 +406,7 @@ int mixed_collection_test(void)
         col_destroy_collection(host);
         col_destroy_collection(socket1);
         col_destroy_collection(socket2);
+        col_destroy_collection(event);
         printf("Failed to add collections. Error %d\n", error);
         return error;
     }
@@ -417,7 +419,7 @@ int mixed_collection_test(void)
     COLOUT(col_debug_collection(event, COL_TRAVERSE_DEFAULT));
     COLOUT(col_debug_collection(socket1, COL_TRAVERSE_DEFAULT));
 
-    COLOUT(printf("SOCKET1 MUST NO BE USED AFTER THIS POINT!!!\n"));
+    COLOUT(printf("SOCKET1 MUST NOT BE USED AFTER THIS POINT!!!\n"));
     socket1 = NULL;
 
     COLOUT(printf("Add collection PEER as PEER1 to subcollection SOCKET1 of the EVENT.\n"));
@@ -430,6 +432,7 @@ int mixed_collection_test(void)
         col_destroy_collection(host);
         /* No socket1 any more :) */
         col_destroy_collection(socket2);
+        col_destroy_collection(event);
         printf("Failed to add collections. Error %d\n", error);
         return error;
     }
@@ -445,6 +448,7 @@ int mixed_collection_test(void)
         col_destroy_collection(host);
         /* No socket1 any more :) */
         col_destroy_collection(socket2);
+        col_destroy_collection(event);
         printf("Failed to add property. Error %d\n", error);
         return error;
     }
@@ -459,6 +463,7 @@ int mixed_collection_test(void)
         col_destroy_collection(host);
         /* No socket1 any more :) */
         col_destroy_collection(socket2);
+        col_destroy_collection(event);
         printf("Failed to add property. Error %d\n", error);
         return error;
     }
@@ -476,6 +481,7 @@ int mixed_collection_test(void)
         col_destroy_collection(host);
         /* No socket1 any more :) */
         col_destroy_collection(socket2);
+        col_destroy_collection(event);
         printf("Failed to check property. Error %d\n", error);
         return error;
     }
@@ -500,6 +506,11 @@ int mixed_collection_test(void)
     if (verbose) {
         error = col_print_collection2(event);
         if (error) {
+            col_destroy_collection(peer);
+            col_destroy_collection(host);
+            /* No socket1 any more :) */
+            col_destroy_collection(socket2);
+            col_destroy_collection(event);
             printf("Error printing collection %d\n", error);
             return error;
         }
@@ -513,6 +524,7 @@ int mixed_collection_test(void)
         col_destroy_collection(host);
         /* No socket1 any more :) */
         col_destroy_collection(socket2);
+        col_destroy_collection(event);
         printf("Failed to delete property. Error %d\n", error);
         return error;
     }
@@ -523,6 +535,11 @@ int mixed_collection_test(void)
     if (verbose) {
         error = col_print_collection2(event);
         if (error) {
+            col_destroy_collection(peer);
+            col_destroy_collection(host);
+            /* No socket1 any more :) */
+            col_destroy_collection(socket2);
+            col_destroy_collection(event);
             printf("Error printing collection %d\n", error);
             return error;
         }
@@ -532,6 +549,11 @@ int mixed_collection_test(void)
     if (verbose) {
         error = col_debug_collection(event, COL_TRAVERSE_DEFAULT);
         if (error) {
+            col_destroy_collection(peer);
+            col_destroy_collection(host);
+            /* No socket1 any more :) */
+            col_destroy_collection(socket2);
+            col_destroy_collection(event);
             printf("Error printing collection %d\n", error);
             return error;
         }
@@ -621,14 +643,14 @@ int mixed_collection_test(void)
 }
 
 
-int iterator_test(void)
+static int iterator_test(void)
 {
-    struct collection_item *peer;
-    struct collection_item *initial;
+    struct collection_item *peer = NULL;
+    struct collection_item *initial = NULL;
 
-    struct collection_item *socket1;
-    struct collection_item *socket2;
-    struct collection_item *socket3;
+    struct collection_item *socket1 = NULL;
+    struct collection_item *socket2 = NULL;
+    struct collection_item *socket3 = NULL;
     struct collection_iterator *iterator = NULL;
     int error = EOK;
     struct collection_item *item = NULL;
@@ -1319,7 +1341,7 @@ int iterator_test(void)
 }
 
 
-int insert_extract_test(void)
+static int insert_extract_test(void)
 {
     struct collection_item *col;
     struct collection_item *col2;
@@ -1332,6 +1354,9 @@ int insert_extract_test(void)
         (error = col_insert_str_property(col, NULL, COL_DSP_END,
                                          NULL, 0, COL_INSERT_NOCHECK,
                                          "property1", "value1", 0)) ||
+        (error = col_insert_str_property(col, NULL, COL_DSP_INDEX,
+                                         NULL, 1, COL_INSERT_NOCHECK,
+                                         "second", "second", 0)) ||
         (error = col_insert_str_property(col, NULL, COL_DSP_END,
                                          NULL, 0, COL_INSERT_NOCHECK,
                                          "property2", "value2", 0)) ||
@@ -1406,6 +1431,14 @@ int insert_extract_test(void)
     COLOUT(printf("\n\n==== EXTRACTION TEST ====\n\n"));
 
     if ((error = col_create_collection(&col2, "extraction", 0)) ||
+
+        (error = col_extract_item(col, NULL, COL_DSP_FRONT,
+                                  NULL, 0, 0, &item)) ||
+
+        (error = col_insert_item(col2, NULL, item, COL_DSP_FRONT,
+                                 NULL, 0, COL_INSERT_NOCHECK)) ||
+
+        ((verbose) && (error = col_debug_collection(col2, COL_TRAVERSE_DEFAULT))) ||
 
         (error = col_extract_item(col, NULL, COL_DSP_FRONT,
                                   NULL, 0, 0, &item)) ||
@@ -1497,11 +1530,27 @@ int insert_extract_test(void)
     return EOK;
 }
 
-int delete_test(void)
+/* Cleanup collback */
+static void cb(const char *property,
+               int property_len,
+               int type,
+               void *data,
+               int length,
+               void *ext_data)
+{
+    COLOUT(printf("%s\n", *((const char **)ext_data)));
+    COLOUT(printf("Property: %s\n", property));
+    COLOUT(printf("Length: %d\n", property_len));
+    COLOUT(printf("Type: %d\n", type));
+    COLOUT(printf("Data len: %d\n", length));
+}
+
+static int delete_test(void)
 {
 
     struct collection_item *col;
     int error = EOK;
+    const char *str = "Cleanup Callback Test";
 
     COLOUT(printf("\n\n==== DELETION TEST 1====\n\n"));
 
@@ -1550,13 +1599,13 @@ int delete_test(void)
     COLOUT(printf("\n\n==== DELETION TEST 2 END ====\n\n"));
 
 
-    col_destroy_collection(col);
+    col_destroy_collection_with_cb(col, cb, (void *)(&str));
 
     return error;
 }
 
 /* Search test */
-int search_test(void)
+static int search_test(void)
 {
     struct collection_item *level1 = NULL;
     struct collection_item *level2 = NULL;
@@ -1599,7 +1648,6 @@ int search_test(void)
     }
 
     found = 0;
-    error = 0;
     error = col_is_item_in_collection(level1, "level1!level2!level3!level4!id", COL_TYPE_ANY, COL_TRAVERSE_DEFAULT, &found);
     if ((error) || (!found)) {
         col_destroy_collection(level1);
@@ -1613,7 +1661,32 @@ int search_test(void)
 
 
     found = 0;
-    error = 0;
+    error = col_is_item_in_collection(level1, NULL, COL_TYPE_INTEGER, COL_TRAVERSE_DEFAULT, &found);
+    if ((error) || (!found)) {
+        col_destroy_collection(level1);
+        col_destroy_collection(level2);
+        col_destroy_collection(level3);
+        col_destroy_collection(level4);
+        printf("Failed to find first int item [level1!level2!level3!level4!id]. Error %d\n", error);
+        return error ? error : ENOENT;
+    }
+    else COLOUT(printf("Expected item is found\n"));
+
+
+    found = 0;
+    error = col_is_item_in_collection(level1, "", COL_TYPE_INTEGER, COL_TRAVERSE_DEFAULT, &found);
+    if ((error) || (!found)) {
+        col_destroy_collection(level1);
+        col_destroy_collection(level2);
+        col_destroy_collection(level3);
+        col_destroy_collection(level4);
+        printf("Failed to find first int item [level1!level2!level3!level4!id]. Error %d\n", error);
+        return error ? error : ENOENT;
+    }
+    else COLOUT(printf("Expected item is found\n"));
+
+
+    found = 0;
     error = col_is_item_in_collection(level1, "level3!level4!id", COL_TYPE_ANY, COL_TRAVERSE_DEFAULT, &found);
     if ((error) || (!found)) {
         col_destroy_collection(level1);
@@ -1626,7 +1699,6 @@ int search_test(void)
     else COLOUT(printf("Expected item is found\n"));
 
     found = 0;
-    error = 0;
     error = col_is_item_in_collection(level1, "level3!packets", COL_TYPE_ANY, COL_TRAVERSE_DEFAULT, &found);
     if ((error) || (!found)) {
         col_destroy_collection(level1);
@@ -1639,7 +1711,6 @@ int search_test(void)
     else COLOUT(printf("Expected item is found\n"));
 
     found = 0;
-    error = 0;
     error = col_is_item_in_collection(level1, "level1!level2!stack", COL_TYPE_ANY, COL_TRAVERSE_DEFAULT, &found);
     if ((error) || (!found)) {
         col_destroy_collection(level1);
@@ -1652,7 +1723,6 @@ int search_test(void)
     else COLOUT(printf("Expected item is found\n"));
 
     found = 0;
-    error = 0;
     error = col_is_item_in_collection(level1, "level1!level2!level3", COL_TYPE_ANY, COL_TRAVERSE_DEFAULT, &found);
     if ((error) || (!found)) {
         col_destroy_collection(level1);
@@ -1663,6 +1733,43 @@ int search_test(void)
         return error ? error : ENOENT;
     }
     else COLOUT(printf("Expected item is found\n"));
+
+    /* Negative tests */
+    found = 0;
+    error = col_is_item_in_collection(level1, NULL, 0, COL_TRAVERSE_DEFAULT, &found);
+    if ((error != ENOENT) || (found)) {
+        col_destroy_collection(level1);
+        col_destroy_collection(level2);
+        col_destroy_collection(level3);
+        col_destroy_collection(level4);
+        if (error) {
+            printf("Unexpected error with NULL & 0 test %d\n", error);
+        }
+        else {
+            printf("Found unexpected item with NULL & 0. Error %d\n", error);
+            error = EINVAL; 
+        }
+        return error;
+    }
+    else COLOUT(printf("No item is found as expected.\n"));
+
+    found = 0;
+    error = col_is_item_in_collection(level1, "", 0, COL_TRAVERSE_DEFAULT, &found);
+    if ((error != ENOENT) || (found)) {
+        col_destroy_collection(level1);
+        col_destroy_collection(level2);
+        col_destroy_collection(level3);
+        col_destroy_collection(level4);
+        if (error) {
+            printf("Unexpected error with \"\" & 0 tests %d\n", error);
+        }
+        else {
+            printf("Found unexpected item with \"\" & 0. Error %d\n", error);
+            error = EINVAL; 
+        }
+        return error;
+    }
+    else COLOUT(printf("No item is found as expected.\n"));
 
     col_destroy_collection(level1);
     col_destroy_collection(level2);
@@ -1675,7 +1782,7 @@ int search_test(void)
 }
 
 /* Sort test */
-int sort_test(void)
+static int sort_test(void)
 {
     struct collection_item *level1 = NULL;
     struct collection_item *level2a = NULL;

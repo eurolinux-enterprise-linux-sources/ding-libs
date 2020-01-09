@@ -17,7 +17,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define _GNU_SOURCE
+#include "config.h"
 #include <errno.h>  /* for errors */
 #include <stdint.h>
 #include <stdio.h>
@@ -25,7 +25,6 @@
 #include <stdlib.h>
 
 #include "ref_array.h"
-#include "config.h"
 #define TRACE_HOME
 #include "trace.h"
 
@@ -36,12 +35,10 @@ int verbose = 0;
         if (verbose) foo; \
     } while(0)
 
-extern void ref_array_debug(struct ref_array *ra);
-
 typedef int (*test_fn)(void);
 
 /* Basic test */
-int ref_array_basic_test(void)
+static int ref_array_basic_test(void)
 {
     const char *line1 = "line1";
     const char *line2 = "line2";
@@ -65,7 +62,7 @@ int ref_array_basic_test(void)
         return error;
     }
 
-    RAOUT(ref_array_debug(ra));
+    RAOUT(ref_array_debug(ra, 0));
 
     error = ref_array_append(ra, &line1);
     if (error) {
@@ -74,7 +71,7 @@ int ref_array_basic_test(void)
         return error;
     }
 
-    RAOUT(ref_array_debug(ra));
+    RAOUT(ref_array_debug(ra, 0));
 
     error = ref_array_append(ra, &line2);
     if (error) {
@@ -83,7 +80,7 @@ int ref_array_basic_test(void)
         return error;
     }
 
-    RAOUT(ref_array_debug(ra));
+    RAOUT(ref_array_debug(ra, 0));
 
     error = ref_array_append(ra, &line3);
     if (error) {
@@ -92,7 +89,7 @@ int ref_array_basic_test(void)
         return error;
     }
 
-    RAOUT(ref_array_debug(ra));
+    RAOUT(ref_array_debug(ra, 0));
 
     error = ref_array_append(ra, &line4);
     if (error) {
@@ -101,7 +98,7 @@ int ref_array_basic_test(void)
         return error;
     }
 
-    RAOUT(ref_array_debug(ra));
+    RAOUT(ref_array_debug(ra, 0));
 
     error = ref_array_append(ra, &line5);
     if (error) {
@@ -110,7 +107,7 @@ int ref_array_basic_test(void)
         return error;
     }
 
-    RAOUT(ref_array_debug(ra));
+    RAOUT(ref_array_debug(ra, 0));
 
     error = ref_array_append(ra, &line6);
     if (error) {
@@ -119,7 +116,7 @@ int ref_array_basic_test(void)
         return error;
     }
 
-    RAOUT(ref_array_debug(ra));
+    RAOUT(ref_array_debug(ra, 0));
 
     RAOUT(printf("\n\nTest 1 - Printing lines.\n\n"));
 
@@ -218,16 +215,16 @@ int ref_array_basic_test(void)
     return EOK;
 }
 
-void array_cleanup(void *elem,
-                   ref_array_del_enum type,
-                   void *data)
+static void array_cleanup(void *elem,
+                          ref_array_del_enum type,
+                          void *data)
 {
     RAOUT(printf("%s%s\n", (char *)data, *((char **)elem)));
     free(*((char **)elem));
 }
 
 /* Free test */
-int ref_array_free_test(void)
+static int ref_array_free_test(void)
 {
     const char *line1 = "line1";
     const char *line2 = "line2";
@@ -247,7 +244,7 @@ int ref_array_free_test(void)
         return error;
     }
 
-    RAOUT(ref_array_debug(ra));
+    RAOUT(ref_array_debug(ra, 0));
 
     str = strdup(line1);
 
@@ -258,7 +255,7 @@ int ref_array_free_test(void)
         return error;
     }
 
-    RAOUT(ref_array_debug(ra));
+    RAOUT(ref_array_debug(ra, 0));
 
     str = strdup(line2);
 
@@ -269,7 +266,7 @@ int ref_array_free_test(void)
         return error;
     }
 
-    RAOUT(ref_array_debug(ra));
+    RAOUT(ref_array_debug(ra, 0));
 
     str = strdup(line3);
 
@@ -280,7 +277,7 @@ int ref_array_free_test(void)
         return error;
     }
 
-    RAOUT(ref_array_debug(ra));
+    RAOUT(ref_array_debug(ra, 0));
 
     str = strdup(line4);
 
@@ -291,7 +288,7 @@ int ref_array_free_test(void)
         return error;
     }
 
-    RAOUT(ref_array_debug(ra));
+    RAOUT(ref_array_debug(ra, 0));
 
     i = 0;
     for (;;) {
@@ -309,7 +306,7 @@ int ref_array_free_test(void)
     return EOK;
 }
 
-int ref_array_adv_test(void)
+static int ref_array_adv_test(void)
 {
     int error = EOK;
     const char *lines[] = { "line0",
@@ -560,7 +557,189 @@ int ref_array_adv_test(void)
     return EOK;
 }
 
+static int copy_cb(void *elem,
+                   void *new_elem)
+{
+    char *ne = NULL;
 
+    ne = strdup(*((char **)elem));
+    *((char **)new_elem) = ne;
+
+    RAOUT(printf("Source: %s\nCopy:%s\n", *((char **)elem), ne));
+
+
+    return EOK;
+}
+
+static int ref_array_copy_test(void)
+{
+    const char *line1 = "line1";
+    const char *line2 = "line2";
+    const char *line3 = "line3";
+    const char *line4 = "line4";
+    const char *line5 = "line5";
+    const char *line6 = "line6";
+    uint32_t i;
+    struct ref_array *ra;
+    struct ref_array *ra2;
+    int error = EOK;
+    uint32_t len = 6;
+    char text[] = "Deleting: ";
+
+    error = ref_array_create(&ra, sizeof(char *), 1, NULL, NULL);
+    if (error) {
+        printf("Failed to create array %d\n", error);
+        return error;
+    }
+
+    RAOUT(ref_array_debug(ra, 0));
+
+    error = ref_array_append(ra, &line1);
+    if (error) {
+        ref_array_destroy(ra);
+        printf("Failed to append to array line 1 %d\n", error);
+        return error;
+    }
+
+    RAOUT(ref_array_debug(ra, 0));
+
+    error = ref_array_append(ra, &line2);
+    if (error) {
+        ref_array_destroy(ra);
+        printf("Failed to append to array line 2 %d\n", error);
+        return error;
+    }
+
+    RAOUT(ref_array_debug(ra, 0));
+
+    error = ref_array_append(ra, &line3);
+    if (error) {
+        ref_array_destroy(ra);
+        printf("Failed to append to array line 3 %d\n", error);
+        return error;
+    }
+
+    RAOUT(ref_array_debug(ra, 0));
+
+    error = ref_array_append(ra, &line4);
+    if (error) {
+        ref_array_destroy(ra);
+        printf("Failed to append to array line 4 %d\n", error);
+        return error;
+    }
+
+    RAOUT(ref_array_debug(ra, 0));
+
+    error = ref_array_append(ra, &line5);
+    if (error) {
+        ref_array_destroy(ra);
+        printf("Failed to append to array line 5 %d\n", error);
+        return error;
+    }
+
+    RAOUT(ref_array_debug(ra, 0));
+
+    error = ref_array_append(ra, &line6);
+    if (error) {
+        ref_array_destroy(ra);
+        printf("Failed to append to array line 6 %d\n", error);
+        return error;
+    }
+
+    RAOUT(ref_array_debug(ra, 0));
+
+    RAOUT(printf("\n\nCopy lines.\n\n"));
+
+    error = ref_array_copy(ra, copy_cb, array_cleanup, (char *)text, &ra2);
+    if (error) {
+        ref_array_destroy(ra);
+        printf("Failed to copy array %d\n", error);
+        return error;
+    }
+
+    for (i = 0; i < len; i++) {
+        if (strcmp(*((char **)ref_array_get(ra, i, NULL)),
+                   *((char **)ref_array_get(ra2, i, NULL))) != 0) {
+            printf("\nRetrieved strings were expected to be same,\n");
+            printf("but they are not:\n");
+            printf("First:[%s]\nSecond:[%s]\n",
+                    *((char **)ref_array_get(ra, i, NULL)),
+                    *((char **)ref_array_get(ra2, i, NULL)));
+            ref_array_destroy(ra);
+            ref_array_destroy(ra2);
+            return EFAULT;
+        }
+    }
+
+    RAOUT(printf("\n\nSource array.\n\n"));
+    RAOUT(ref_array_debug(ra, 0));
+    ref_array_destroy(ra);
+
+    RAOUT(printf("\n\nAbout to destroy a copy.\n\n"));
+    RAOUT(ref_array_debug(ra2, 0));
+    ref_array_destroy(ra2);
+
+    RAOUT(printf("\n\nDone!!!\n\n"));
+    return EOK;
+
+}
+
+static int ref_array_copy_num_test(void)
+{
+    uint32_t i,j,k;
+    struct ref_array *ra;
+    struct ref_array *ra2;
+    int error = EOK;
+    uint32_t len = 5;
+
+    error = ref_array_create(&ra, sizeof(uint32_t), 1, NULL, NULL);
+    if (error) {
+        printf("Failed to create array %d\n", error);
+        return error;
+    }
+
+    RAOUT(ref_array_debug(ra, 1));
+
+    for (i = 0; i < len; i++) {
+        error = ref_array_append(ra, &i);
+        if (error) {
+            ref_array_destroy(ra);
+            printf("Failed to append number to array %d\n", error);
+            return error;
+        }
+
+        RAOUT(ref_array_debug(ra, 1));
+    }
+
+    RAOUT(printf("\n\nCopy num test.\n\n"));
+
+    error = ref_array_copy(ra, NULL, NULL, NULL, &ra2);
+    if (error) {
+        ref_array_destroy(ra);
+        printf("Failed to copy array %d\n", error);
+        return error;
+    }
+
+    for (i = 0; i < len; i++) {
+        j = *((uint32_t *)(ref_array_get(ra, i, NULL)));
+        k = *((uint32_t *)(ref_array_get(ra2, i, NULL)));
+        if (j != k) {
+            printf("\nRetrieved values were expected to be same,\n");
+            printf("but they are not:\n");
+            printf("First:[%d]\nSecond:[%d]\n", j, k);
+            ref_array_destroy(ra);
+            ref_array_destroy(ra2);
+            return EFAULT;
+        }
+    }
+
+    ref_array_destroy(ra);
+    ref_array_destroy(ra2);
+
+    RAOUT(printf("\n\nDone!!!\n\n"));
+    return EOK;
+
+}
 
 /* Main function of the unit test */
 int main(int argc, char *argv[])
@@ -569,6 +748,8 @@ int main(int argc, char *argv[])
     test_fn tests[] = { ref_array_basic_test,
                         ref_array_free_test,
                         ref_array_adv_test,
+                        ref_array_copy_test,
+                        ref_array_copy_num_test,
                         NULL };
     test_fn t;
     int i = 0;

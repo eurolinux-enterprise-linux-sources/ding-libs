@@ -226,15 +226,19 @@
 #define ERR_NOSECTION       3
 /** @brief Section name too long (Error). */
 #define ERR_SECTIONLONG     4
-/** @brief No equal sign (Warning). */
+/** @brief No equal sign (Error). */
 #define ERR_NOEQUAL         5
-/** @brief No key before equal sign (Warning). */
+/** @brief No key before equal sign (Error). */
 #define ERR_NOKEY           6
-/** @brief Key is too long (Warning). */
+/** @brief Key is too long (Error). */
 #define ERR_LONGKEY         7
+/** @brief Failed to read line (Error). */
+#define ERR_READ            8
+/** @brief Line starts with space when it should not (Error). */
+#define ERR_SPACE           9
 
 /** @brief Size of the error array. */
-#define ERR_MAXPARSE        ERR_LONGKEY
+#define ERR_MAXPARSE        ERR_SPACE
 
 /**
  * @}
@@ -493,14 +497,6 @@ struct parse_error {
  * @defgroup functions Functions
  * @{
  */
-
-/** @brief Function to return a parsing error as a string.
- *
- * @param[in] parsing_error    Error code for the parsing error.
- *
- * @return Error string.
- */
-const char *parsing_error_str(int parsing_error);
 
 
 /**

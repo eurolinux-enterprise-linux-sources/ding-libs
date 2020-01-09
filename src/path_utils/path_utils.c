@@ -102,7 +102,7 @@ static int dot_to_absolute(char *rel_path, int rel_path_size)
                 return errno;
         }
         strncpy(rel_path, dirname(tmp_path), rel_path_size);
-        if (rel_path[rel_path_size-1] != 0) return ENOBUFS;
+        if (rel_path[rel_path_size-1] != '\0') return ENOBUFS;
     }
 
     return SUCCESS;
@@ -117,9 +117,9 @@ int get_basename(char *base_name, size_t base_name_size, const char *path)
     if (!base_name || base_name_size < 1) return ENOBUFS;
 
     strncpy(tmp_path, path, sizeof(tmp_path));
-    if (tmp_path[sizeof(tmp_path)-1] != 0) return ENOBUFS;
+    if (tmp_path[sizeof(tmp_path)-1] != '\0') return ENOBUFS;
     strncpy(base_name, basename(tmp_path), base_name_size);
-    if (base_name[base_name_size-1] != 0) return ENOBUFS;
+    if (base_name[base_name_size-1] != '\0') return ENOBUFS;
 
     ret = dot_to_absolute(base_name, base_name_size);
     if (ret != SUCCESS) {
@@ -138,9 +138,9 @@ int get_dirname(char *dir_path, size_t dir_path_size, const char *path)
     if (!dir_path || dir_path_size < 1) return ENOBUFS;
 
     strncpy(tmp_path, path, sizeof(tmp_path));
-    if (tmp_path[sizeof(tmp_path)-1] != 0) return ENOBUFS;
+    if (tmp_path[sizeof(tmp_path)-1] != '\0') return ENOBUFS;
     strncpy(dir_path, dirname(tmp_path), dir_path_size);
-    if (dir_path[dir_path_size-1] != 0) return ENOBUFS;
+    if (dir_path[dir_path_size-1] != '\0') return ENOBUFS;
 
     ret = dot_to_absolute(dir_path, dir_path_size);
     if (ret != SUCCESS) {
@@ -162,14 +162,14 @@ int get_directory_and_base_name(char *dir_path, size_t dir_path_size,
     if (!base_name || base_name_size < 1) return ENOBUFS;
 
     strncpy(tmp_path, path, sizeof(tmp_path));
-    if (tmp_path[sizeof(tmp_path)-1] != 0) return ENOBUFS;
+    if (tmp_path[sizeof(tmp_path)-1] != '\0') return ENOBUFS;
     strncpy(base_name, basename(tmp_path), base_name_size);
-    if (base_name[base_name_size-1] != 0) return ENOBUFS;
+    if (base_name[base_name_size-1] != '\0') return ENOBUFS;
 
     strncpy(tmp_path, path, sizeof(tmp_path));
-    if (tmp_path[sizeof(tmp_path)-1] != 0) return ENOBUFS;
+    if (tmp_path[sizeof(tmp_path)-1] != '\0') return ENOBUFS;
     strncpy(dir_path, dirname(tmp_path), dir_path_size);
-    if (dir_path[dir_path_size-1] != 0) return ENOBUFS;
+    if (dir_path[dir_path_size-1] != '\0') return ENOBUFS;
 
     ret = dot_to_absolute(dir_path, dir_path_size);
     if (ret != SUCCESS) {
@@ -178,7 +178,7 @@ int get_directory_and_base_name(char *dir_path, size_t dir_path_size,
 
     if (strcmp(base_name, ".") == 0) {
         strncpy(base_name, "", base_name_size);
-        if (base_name[base_name_size-1] != 0) return ENOBUFS;
+        if (base_name[base_name_size-1] != '\0') return ENOBUFS;
     }
 
     return SUCCESS;
@@ -192,6 +192,7 @@ bool is_absolute_path(const char *path)
 
 int path_concat(char *path, size_t path_size, const char *head, const char *tail)
 {
+    int ret;
     const char *p, *src;
     char *dst, *dst_end;
 
@@ -201,24 +202,59 @@ int path_concat(char *path, size_t path_size, const char *head, const char *tail
     dst_end = path + path_size - 1;             /* -1 allows for NULL terminator */
 
     if (head && *head) {
-        for (p = head; *p; p++);                /* walk to end of head */
-        for (p--; p >= head && *p == '/'; p--); /* skip any trailing slashes in head */
-        if ((p - head) > path_size-1) return ENOBUFS;
-        for (src = head; src <= p && dst < dst_end;) *dst++ = *src++; /* copy head */
+        /* walk to end of head */
+        for (p = head; *p; p++);
+
+        /* skip any trailing slashes in head */
+        for (p--; p > head && *p == '/'; p--);
+
+        /* If the length of head exceeds the buffer size, fail */
+        if ((p - head) > path_size-1) {
+            ret = ENOBUFS;
+            goto fail;
+        }
+
+        /* Copy head into path */
+        for (src = head; src <= p && dst < dst_end;) {
+            *dst++ = *src++;
+        }
     }
     if (tail && *tail) {
-        for (p = tail; *p && *p == '/'; p++);   /* skip any leading slashes in tail */
+        /* skip any leading slashes in tail */
+        for (p = tail; *p && *p == '/'; p++);
+
         if (dst > path)
-            if (dst < dst_end) *dst++ = '/';    /* insert single slash between head & tail */
-        for (src = p; *src && dst <= dst_end;) *dst++ = *src++; /* copy tail */
-        if (*src) return ENOBUFS; /* failed to copy everything */
+            /* insert single slash between head & tail
+             * Making sure not to add an extra if the
+             * preceding character is also a slash
+             * (such as the case where head was the
+             * special-case "/".
+             */
+            if (dst < dst_end && *(dst-1) != '/') {
+                *dst++ = '/';
+            }
+
+        /* Copy the tail into the path */
+        for (src = p; *src && dst < dst_end;) {
+            *dst++ = *src++;
+        }
+
+        /* If we got past dst_end and there is more data
+         * in the src buffer, we should return ENOBUFS
+         */
+        if (*src) {
+            ret = ENOBUFS; /* failed to copy everything */
+            goto fail;
+        }
     }
     *dst = 0;
-    if (dst > dst_end) {
-        return ENOBUFS;
-    }
+
     return SUCCESS;
 
+fail:
+    /* On failure, set the buffer to the empty string for safety */
+    *path = '\0';
+    return ret;
 }
 
 int make_path_absolute(char *absolute_path, size_t absolute_path_size, const char *path)
@@ -321,13 +357,13 @@ char **split_path(const char *path, int *count)
     for (start = end = path; *start; start = end) {
         for (start = end; *start && *start == '/'; start++);
         for (end = start; *end && *end != '/'; end++);
-        if ((component_len = end - start) == 0) break;
+        if ((end - start) == 0) break;
 
         *array_ptr++ = component_ptr;
         while (start < end) *component_ptr++ = *start++;
         *component_ptr++ = 0;
     }
-    *array_ptr++ = NULL;
+    *array_ptr = NULL;
     if (count) *count = n_components;
     return (char **)mem_block;
 }
@@ -493,7 +529,7 @@ int find_existing_directory_ancestor(char *ancestor, size_t ancestor_size, const
     if (!ancestor || ancestor_size < 1) return ENOBUFS;
     *ancestor = 0;
     strncpy(dir_path, path, sizeof(dir_path));
-    if (dir_path[sizeof(dir_path)-1] != 0) return ENOBUFS;
+    if (dir_path[sizeof(dir_path)-1] != '\0') return ENOBUFS;
 
     while (strcmp(dir_path, "/") != 0) {
         if (lstat(dir_path, &info) < 0) {
@@ -509,7 +545,7 @@ int find_existing_directory_ancestor(char *ancestor, size_t ancestor_size, const
     }
 
     strncpy(ancestor, dir_path, ancestor_size);
-    if (ancestor[ancestor_size-1] != 0) return ENOBUFS;
+    if (ancestor[ancestor_size-1] != '\0') return ENOBUFS;
     return SUCCESS;
 }
 
@@ -529,7 +565,7 @@ int directory_list(const char *path, bool recursive,
     }
 
     for (entry = readdir(dir); entry; entry = readdir(dir)) {
-        prune = false;
+
         if (strcmp(entry->d_name, ".") == 0 ||
             strcmp(entry->d_name, "..") == 0) {
             continue;
@@ -575,25 +611,21 @@ bool is_ancestor_path(const char *ancestor, const char *path)
 {
     char **path_components, **ancestor_components;
     int i, path_count, ancestor_count;
-    bool result;
+    bool result = false;
 
-    result = false;
     path_components = split_path(path, &path_count);
     ancestor_components = split_path(ancestor, &ancestor_count);
 
     if (!path_components || !ancestor_components) {
-        result = false;
         goto exit;
     }
 
     if (ancestor_count >= path_count) {
-        result = false;
         goto exit;
     }
 
     for (i = 0; i < ancestor_count; i++) {
         if (strcmp(path_components[i], ancestor_components[i]) != 0) {
-            result = false;
             goto exit;
         }
     }

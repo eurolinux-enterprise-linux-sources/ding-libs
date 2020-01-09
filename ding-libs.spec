@@ -1,6 +1,6 @@
 Name: ding-libs
-Version: 0.1.2
-Release: 9%{?dist}
+Version: 0.4.0
+Release: 11%{?dist}
 Summary: "Ding is not GLib" assorted utility libraries
 Group: Development/Libraries
 License: LGPLv3+
@@ -8,18 +8,27 @@ URL: http://fedorahosted.org/sssd/
 Source0: http://fedorahosted.org/releases/d/i/ding-libs/%{name}-%{version}.tar.gz
 BuildRoot: %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 
+# If a new upstream release changes some, but not all of these
+# version numbers, remember to keep the Release tag in order to
+# allow clean upgrades!
 %global path_utils_version 0.2.1
-%global dhash_version 0.4.2
-%global collection_version 0.6.0
-%global ref_array_version 0.1.1
-%global ini_config_version 0.6.1
+%global dhash_version 0.4.3
+%global collection_version 0.6.2
+%global ref_array_version 0.1.4
+%global basicobjects_version 0.1.1
+%global ini_config_version 1.1.0
 
 ### Patches ###
-Patch0001: 0001-Fix-license-text-for-several-files-that-should-be-LG.patch
-Patch0002: 0002-Resolves-bug-735464-Fix-the-loop-limit-used-to-initi.patch
-Patch0003: 0003-Fix-stack-smashing-error-in-path_utils.patch
 
 ### Dependencies ###
+# ding-libs is a meta-package that will pull in all of its own
+# sub-packages
+Requires: libpath_utils = %{path_utils_version}-%{release}
+Requires: libdhash = %{dhash_version}-%{release}
+Requires: libcollection = %{collection_version}-%{release}
+Requires: libref_array = %{ref_array_version}-%{release}
+Requires: libbasicobjects = %{basicobjects_version}-%{release}
+Requires: libini_config = %{ini_config_version}-%{release}
 
 ### Build Dependencies ###
 
@@ -32,6 +41,24 @@ BuildRequires: check-devel
 
 %description
 A set of helpful libraries used by projects such as SSSD.
+
+%package devel
+Summary: Development packages for ding-libs
+Group: Development/Libraries
+License: LGPLv3+
+
+# ding-libs is a meta-package that will pull in all of its own
+# sub-packages
+Requires: libpath_utils-devel = %{path_utils_version}-%{release}
+Requires: libdhash-devel = %{dhash_version}-%{release}
+Requires: libcollection-devel = %{collection_version}-%{release}
+Requires: libref_array-devel = %{ref_array_version}-%{release}
+Requires: libbasicobjects-devel = %{basicobjects_version}-%{release}
+Requires: libini_config-devel = %{ini_config_version}-%{release}
+
+%description devel
+A meta-package that pulls in development libraries for libcollection,
+libdhash, libini_config, librefarray and libpath_utils.
 
 ##############################################################################
 # Path Utils
@@ -62,8 +89,7 @@ Utility functions to manipulate filesystem pathnames
 %files -n libpath_utils
 %defattr(-,root,root,-)
 %doc COPYING COPYING.LESSER
-%{_libdir}/libpath_utils.so.1
-%{_libdir}/libpath_utils.so.1.0.0
+%{_libdir}/libpath_utils.so.*
 
 %files -n libpath_utils-devel
 %defattr(-,root,root,-)
@@ -105,8 +131,7 @@ time properties
 %files -n libdhash
 %defattr(-,root,root,-)
 %doc COPYING COPYING.LESSER
-%{_libdir}/libdhash.so.1
-%{_libdir}/libdhash.so.1.0.0
+%{_libdir}/libdhash.so.*
 
 %files -n libdhash-devel
 %defattr(-,root,root,-)
@@ -114,7 +139,8 @@ time properties
 %{_libdir}/libdhash.so
 %{_libdir}/pkgconfig/dhash.pc
 %doc dhash/README.dhash
-%doc dhash/examples/
+%doc dhash/examples/dhash_example.c
+%doc dhash/examples/dhash_test.c
 
 
 ##############################################################################
@@ -149,8 +175,7 @@ and serialization
 %defattr(-,root,root,-)
 %doc COPYING
 %doc COPYING.LESSER
-%{_libdir}/libcollection.so.2
-%{_libdir}/libcollection.so.2.0.0
+%{_libdir}/libcollection.so.*
 
 %files -n libcollection-devel
 %defattr(-,root,root,-)
@@ -193,8 +218,7 @@ A dynamically-growing, reference-counted array
 %defattr(-,root,root,-)
 %doc COPYING
 %doc COPYING.LESSER
-%{_libdir}/libref_array.so.1
-%{_libdir}/libref_array.so.1.0.0
+%{_libdir}/libref_array.so.*
 
 %files -n libref_array-devel
 %defattr(-,root,root,-)
@@ -203,6 +227,42 @@ A dynamically-growing, reference-counted array
 %{_libdir}/pkgconfig/ref_array.pc
 %doc refarray/README.ref_array
 %doc refarray/doc/html/
+
+##############################################################################
+# basicobjects
+##############################################################################
+
+%package -n libbasicobjects
+Summary: Basic object types for C
+Group: Development/Libraries
+License: GPLv3+
+Version: %{basicobjects_version}
+
+%description -n libbasicobjects
+Basic object types
+
+%package -n libbasicobjects-devel
+Summary: Development files for libbasicobjects
+Group: Development/Libraries
+License: GPLv3+
+Version: %{basicobjects_version}
+Requires: libbasicobjects = %{basicobjects_version}-%{release}
+
+%description -n libbasicobjects-devel
+Basic object types
+
+%post -n libbasicobjects -p /sbin/ldconfig
+%postun -n libbasicobjects -p /sbin/ldconfig
+
+%files -n libbasicobjects
+%doc COPYING
+%doc COPYING.LESSER
+%{_libdir}/libbasicobjects.so.*
+
+%files -n libbasicobjects-devel
+%{_includedir}/simplebuffer.h
+%{_libdir}/libbasicobjects.so
+%{_libdir}/pkgconfig/basicobjects.pc
 
 
 ##############################################################################
@@ -228,6 +288,8 @@ Group: Development/Libraries
 License: LGPLv3+
 Requires: libini_config = %{ini_config_version}-%{release}
 Requires: libcollection-devel = %{collection_version}-%{release}
+Requires: libref_array-devel = %{ref_array_version}-%{release}
+Requires: libbasicobjects-devel = %{basicobjects_version}-%{release}
 Version: %{ini_config_version}
 
 %description -n libini_config-devel
@@ -241,12 +303,14 @@ structure
 %defattr(-,root,root,-)
 %doc COPYING
 %doc COPYING.LESSER
-%{_libdir}/libini_config.so.2
-%{_libdir}/libini_config.so.2.0.0
+%{_libdir}/libini_config.so.*
 
 %files -n libini_config-devel
 %defattr(-,root,root,-)
 %{_includedir}/ini_config.h
+%{_includedir}/ini_comment.h
+%{_includedir}/ini_configobj.h
+%{_includedir}/ini_valueobj.h
 %{_libdir}/libini_config.so
 %{_libdir}/pkgconfig/ini_config.pc
 %doc ini/doc/html/
@@ -258,11 +322,9 @@ structure
 
 %prep
 %setup -q
-%patch0001 -p1
-%patch0002 -p1
-%patch0003 -p1
 
 %build
+autoreconf -ivf
 %configure \
     --disable-static
 
@@ -294,6 +356,14 @@ rm -f */doc/html/installdox
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Thu Jun 03 2014 Jakub Hrozek <jhrozek@redhat.com> - 0.4.0-11
+- Do not package built objects in dhash-devel
+- Fix NVR in the previous changelog entry
+- Related: rhbz#1069287 - Rebase ding-libs to latest version in 6.6
+
+* Thu May 29 2014 Jakub Hrozek <jhrozek@redhat.com> - 0.4.0-10
+- Resolves: rhbz#1069287 - Rebase ding-libs to latest version in 6.6
+
 * Thu Mar 29 2012 Stephen Gallagher <sgallagh@redhat.com> - 0.1.2-9
 - Resolves: rhbz#801393 - Off-by-one error causing stack smashing in path_utils
 

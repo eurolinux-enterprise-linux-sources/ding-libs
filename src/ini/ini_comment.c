@@ -19,17 +19,21 @@
     along with INI Library.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define _GNU_SOURCE
+#include "config.h"
 #include <errno.h>
 #include <string.h>
 #include <ctype.h>
-#include "config.h"
 #include "trace.h"
 #include "ref_array.h"
+#include "simplebuffer.h"
 #include "ini_comment.h"
+#include "ini_defines.h"
 
 /* The lines will increment in this number */
 #define INI_COMMENT_BLOCK 10
+/* Default comment length */
+#define INI_COMMENT_LEN 100
+
 
 /***************************/
 /* Internal comment states */
@@ -67,25 +71,25 @@ struct ini_comment {
 void ini_comment_destroy(struct ini_comment *ic)
 {
 
-    TRACE_FLOW_STRING("ini_comment_destroy", "Entry");
+    TRACE_FLOW_ENTRY();
     if (ic) {
         /* Function will check for NULL */
         ref_array_destroy(ic->ra);
         free(ic);
     }
-    TRACE_FLOW_STRING("ini_comment_destroy", "Exit");
+    TRACE_FLOW_EXIT();
 }
 
 
 /* Cleanup callback */
-void ini_comment_cb(void *elem,
-                    ref_array_del_enum type,
-                    void *data)
+static void ini_comment_cb(void *elem,
+                           ref_array_del_enum type,
+                           void *data)
 {
 
-    TRACE_FLOW_STRING("ini_comment_cb", "Entry");
-    free(*((char **)elem));
-    TRACE_FLOW_STRING("ini_comment_cb", "Exit");
+    TRACE_FLOW_ENTRY();
+    simplebuffer_free(*((struct simplebuffer **)elem));
+    TRACE_FLOW_EXIT();
 }
 
 
@@ -96,10 +100,10 @@ int ini_comment_create(struct ini_comment **ic)
     struct ref_array *ra = NULL;
     struct ini_comment *ic_new = NULL;
 
-    TRACE_FLOW_STRING("ini_comment_create", "Entry");
+    TRACE_FLOW_ENTRY();
 
     error = ref_array_create(&ra,
-                             sizeof(char *),
+                             sizeof(struct simplebuffer *),
                              INI_COMMENT_BLOCK,
                              ini_comment_cb,
                              NULL);
@@ -111,7 +115,7 @@ int ini_comment_create(struct ini_comment **ic)
     ic_new = malloc(sizeof(struct ini_comment));
     if (!ic_new) {
         TRACE_ERROR_NUMBER("Memory allocation error", ENOMEM);
-        ref_array_destroy(ic_new->ra);
+        ref_array_destroy(ra);
         return ENOMEM;
     }
 
@@ -121,49 +125,80 @@ int ini_comment_create(struct ini_comment **ic)
 
     *ic = ic_new;
 
-    TRACE_FLOW_STRING("ini_comment_create", "Exit");
+    TRACE_FLOW_EXIT();
+    return error;
+}
+
+/* Callback to copy comment */
+static int ini_comment_copy_cb(void *elem,
+                               void *new_elem)
+{
+    int error = EOK;
+    struct simplebuffer *sb = NULL;
+    struct simplebuffer *sb_new = NULL;
+
+    TRACE_FLOW_ENTRY();
+
+    error = simplebuffer_alloc(&sb_new);
+    if (error) {
+        TRACE_ERROR_NUMBER("Failed to allocate buffer", error);
+        return error;
+    }
+
+    sb = *((struct simplebuffer **)elem);
+    error = simplebuffer_add_str(sb_new,
+                                 (const char *)simplebuffer_get_buf(sb),
+                                 simplebuffer_get_len(sb),
+                                 INI_COMMENT_LEN);
+    if (error) {
+        TRACE_ERROR_NUMBER("Failed to allocate buffer", error);
+        simplebuffer_free(sb_new);
+        return error;
+    }
+
+    *((struct simplebuffer **)new_elem) = sb_new;
+
+    TRACE_FLOW_EXIT();
     return error;
 }
 
 
-/* Is the comment valid? */
-static int ini_comment_is_valid(const char *line)
+/* Create a copy of the comment object */
+int ini_comment_copy(struct ini_comment *ic,
+                     struct ini_comment **ic_copy)
 {
-    int i;
+    int error = EOK;
+    struct ref_array *ra = NULL;
+    struct ini_comment *ic_new = NULL;
 
-    TRACE_FLOW_STRING("ini_comment_is_valid", "Entry");
+    TRACE_FLOW_ENTRY();
 
-    /* Null is ok */
-    if (!line) {
-        TRACE_FLOW_STRING("ini_comment_is_valid", "Exit - NULL str");
-        return 1;
+    error = ref_array_copy(ic->ra,
+                           ini_comment_copy_cb,
+                           ini_comment_cb,
+                           NULL,
+                           &ra);
+    if (error) {
+        TRACE_ERROR_NUMBER("Error creating a copy of ref array", error);
+        return error;
     }
 
-    /* Empty is Ok or starts with a special symbol */
-    if ((line[0] == '\0') ||
-        (line[0] == ';') ||
-        (line[0] == '#')) {
-        TRACE_FLOW_STRING("ini_comment_is_valid", "Exit - empty or comment");
-        return 1;
+    ic_new = malloc(sizeof(struct ini_comment));
+    if (!ic_new) {
+        TRACE_ERROR_NUMBER("Memory allocation error", ENOMEM);
+        ref_array_destroy(ra);
+        return ENOMEM;
     }
 
-    /* All spaces is Ok too */
-    TRACE_INFO_STRING("Line to eval", line);
+    /* Initialize members here */
+    ic_new->ra = ra;
+    ic_new->state = ic->state;
 
-    i = 0;
-    while (line[i] != '\0') {
-        if (!isspace(line[i])) {
-            TRACE_ERROR_STRING("ini_comment_is_valid", "Invalid comment");
-            return 0;
-        }
-        i++;
-    }
+    *ic_copy = ic_new;
 
-    TRACE_FLOW_STRING("ini_comment_is_valid", "Exit - empty str");
-    return 1;
-
+    TRACE_FLOW_EXIT();
+    return error;
 }
-
 
 /*
  * Modify the comment object
@@ -171,15 +206,18 @@ static int ini_comment_is_valid(const char *line)
 static int ini_comment_modify(struct ini_comment *ic,
                               int mode,
                               uint32_t idx,
-                              const char *line)
+                              const char *line,
+                              uint32_t length)
 {
     int error = EOK;
-    char *elem = NULL;
+    struct simplebuffer *elem = NULL;
+    struct simplebuffer *empty = NULL;
     char *input = NULL;
-    char *empty = NULL;
-    uint32_t i, len = 0;
 
-    TRACE_FLOW_STRING("ini_comment_modify", "Entry");
+    uint32_t i, len = 0;
+    uint32_t input_len = 0;
+
+    TRACE_FLOW_ENTRY();
 
     if (!ic) {
         TRACE_ERROR_NUMBER("Invalid comment object", EINVAL);
@@ -204,22 +242,33 @@ static int ini_comment_modify(struct ini_comment *ic,
         memcpy(&input, &line, sizeof(char *));
 
     if (mode != INI_COMMENT_MODE_REMOVE) {
-        /*
-         * Check that provided line is a comment or an empty line.
-         * Can be NULL too.
-         */
-        if (!ini_comment_is_valid(input)) {
-            TRACE_ERROR_NUMBER("Invalid comment", EINVAL);
-            return EINVAL;
+
+        error = simplebuffer_alloc(&elem);
+        if (error) {
+            TRACE_ERROR_NUMBER("Allocate buffer for the comment", error);
+            return error;
         }
 
-        /* Dup it */
-        if (input) elem = strdup(input);
-        else elem = strdup("");
+        if (input) {
+            if (length == 0) input_len = strlen(input);
+            else input_len = length;
 
-        if (!elem) {
-            TRACE_ERROR_NUMBER("Memory allocation error", ENOMEM);
-            return ENOMEM;
+            error = simplebuffer_add_str(elem,
+                                         input,
+                                         input_len,
+                                         INI_COMMENT_LEN);
+        }
+        else {
+            error = simplebuffer_add_str(elem,
+                                         "",
+                                         0,
+                                         INI_COMMENT_LEN);
+        }
+
+        if (error) {
+            TRACE_ERROR_NUMBER("Allocate buffer for the comment", error);
+            simplebuffer_free(elem);
+            return error;
         }
     }
 
@@ -228,13 +277,25 @@ static int ini_comment_modify(struct ini_comment *ic,
     case INI_COMMENT_MODE_BUILD:
 
         TRACE_INFO_STRING("BUILD mode", "");
-        error = ref_array_append(ic->ra, &elem);
+        error = ref_array_append(ic->ra, (void *)&elem);
+        if (error) {
+            TRACE_ERROR_NUMBER("Failed to append line to an array", error);
+            simplebuffer_free(elem);
+            return error;
+        }
+
         break;
 
     case INI_COMMENT_MODE_APPEND:
 
         TRACE_INFO_STRING("Append mode", "");
-        error = ref_array_append(ic->ra, &elem);
+        error = ref_array_append(ic->ra, (void *)&elem);
+        if (error) {
+            TRACE_ERROR_NUMBER("Failed to append line to an array", error);
+            simplebuffer_free(elem);
+            return error;
+        }
+
         break;
 
     case INI_COMMENT_MODE_INSERT:
@@ -244,24 +305,47 @@ static int ini_comment_modify(struct ini_comment *ic,
         if (idx > len) {
             /* Fill in empty lines */
             for (i = 0; i < (idx-len); i++) {
-                empty = strdup("");
-                if (empty) {
-                    TRACE_ERROR_NUMBER("Memory problem", ENOMEM);
-                    return ENOMEM;
+                error = simplebuffer_alloc(&empty);
+                if (error) {
+                    TRACE_ERROR_NUMBER("Allocate buffer for the comment", error);
+                    simplebuffer_free(elem);
+                    return error;
                 }
-                error = ref_array_append(ic->ra, &empty);
+                error = simplebuffer_add_str(elem,
+                                             NULL,
+                                             0,
+                                             INI_COMMENT_LEN);
+                if (error) {
+                    TRACE_ERROR_NUMBER("Make comment empty", error);
+                    simplebuffer_free(empty);
+                    simplebuffer_free(elem);
+                    return error;
+                }
+                error = ref_array_append(ic->ra, (void *)&empty);
                 if (error) {
                     TRACE_ERROR_NUMBER("Append problem", error);
-                    free(empty);
+                    simplebuffer_free(empty);
+                    simplebuffer_free(elem);
                     return error;
                 }
             }
             /* Append last line */
-            error = ref_array_append(ic->ra, &elem);
+            error = ref_array_append(ic->ra, (void *)&elem);
+            if (error) {
+                TRACE_ERROR_NUMBER("Failed to append last line", error);
+                simplebuffer_free(elem);
+                return error;
+            }
         }
         else {
             /* Insert inside the array */
-            error = ref_array_insert(ic->ra, idx, &elem);
+            error = ref_array_insert(ic->ra, idx, (void *)&elem);
+            if (error) {
+                TRACE_ERROR_NUMBER("Failed to append last line", error);
+                simplebuffer_free(elem);
+                return error;
+            }
+
         }
         break;
 
@@ -269,40 +353,51 @@ static int ini_comment_modify(struct ini_comment *ic,
     case INI_COMMENT_MODE_REPLACE:
 
         TRACE_INFO_STRING("Replace mode", "");
-        error = ref_array_replace(ic->ra, idx, &elem);
+        error = ref_array_replace(ic->ra, idx, (void *)&elem);
+        if (error) {
+            TRACE_ERROR_NUMBER("Failed to replace", error);
+            simplebuffer_free(elem);
+            return error;
+        }
         break;
 
     case INI_COMMENT_MODE_REMOVE:
 
         TRACE_INFO_STRING("Remove mode", "");
         error = ref_array_remove(ic->ra, idx);
+        if (error) {
+            TRACE_ERROR_NUMBER("Failed to remove", error);
+            return error;
+        }
+
         break;
 
     case INI_COMMENT_MODE_CLEAR:
 
         TRACE_INFO_STRING("Clear mode", "");
-        error = ref_array_replace(ic->ra, idx, &elem);
+        error = ref_array_replace(ic->ra, idx, (void *)&elem);
+        if (error) {
+            TRACE_ERROR_NUMBER("Failed to replace", error);
+            simplebuffer_free(elem);
+            return error;
+        }
         break;
 
     default :
 
         TRACE_ERROR_STRING("Coding error", "");
-        error = EINVAL;
+        simplebuffer_free(elem);
+        return EINVAL;
 
     }
 
-    if (error) {
-        TRACE_ERROR_NUMBER("Failed to append line to an array", error);
-        free(elem);
-        return error;
-    }
 
     /* Change state */
     if (INI_COMMENT_MODE_BUILD) ic->state = INI_COMMENT_READ;
     else ic->state = INI_COMMENT_CHANGED;
 
 
-    TRACE_FLOW_STRING("ini_comment_modify", "Exit");
+    TRACE_FLOW_EXIT();
     return error;
 }
 
@@ -314,9 +409,27 @@ int ini_comment_build(struct ini_comment *ic, const char *line)
 {
     int error = EOK;
 
-    TRACE_FLOW_STRING("ini_comment_build", "Entry");
+    TRACE_FLOW_ENTRY();
 
-    error = ini_comment_modify(ic, INI_COMMENT_MODE_BUILD, 0, line);
+    error = ini_comment_modify(ic, INI_COMMENT_MODE_BUILD, 0, line, 0);
+
+    TRACE_FLOW_NUMBER("ini_comment_build - Returning", error);
+    return error;
+}
+
+/*
+ * Build up a comment object - use this when reading
+ * comments from a file.
+ */
+int ini_comment_build_wl(struct ini_comment *ic,
+                         const char *line,
+                         uint32_t length)
+{
+    int error = EOK;
+
+    TRACE_FLOW_ENTRY();
+
+    error = ini_comment_modify(ic, INI_COMMENT_MODE_BUILD, 0, line, length);
 
     TRACE_FLOW_NUMBER("ini_comment_build - Returning", error);
     return error;
@@ -331,9 +444,9 @@ int ini_comment_insert(struct ini_comment *ic,
 {
     int error = EOK;
 
-    TRACE_FLOW_STRING("ini_comment_insert", "Entry");
+    TRACE_FLOW_ENTRY();
 
-    error = ini_comment_modify(ic, INI_COMMENT_MODE_INSERT, idx, line);
+    error = ini_comment_modify(ic, INI_COMMENT_MODE_INSERT, idx, line, 0);
 
     TRACE_FLOW_NUMBER("ini_comment_insert - Returning", error);
     return error;
@@ -344,9 +457,9 @@ int ini_comment_append(struct ini_comment *ic, const char *line)
 {
     int error = EOK;
 
-    TRACE_FLOW_STRING("ini_comment_append", "Entry");
+    TRACE_FLOW_ENTRY();
 
-    error = ini_comment_modify(ic, INI_COMMENT_MODE_APPEND, 0, line);
+    error = ini_comment_modify(ic, INI_COMMENT_MODE_APPEND, 0, line, 0);
 
     TRACE_FLOW_NUMBER("ini_comment_append - Returning", error);
     return error;
@@ -357,9 +470,9 @@ int ini_comment_remove(struct ini_comment *ic, uint32_t idx)
 {
     int error = EOK;
 
-    TRACE_FLOW_STRING("ini_comment_remove", "Entry");
+    TRACE_FLOW_ENTRY();
 
-    error = ini_comment_modify(ic, INI_COMMENT_MODE_REMOVE, idx, NULL);
+    error = ini_comment_modify(ic, INI_COMMENT_MODE_REMOVE, idx, NULL, 0);
 
     TRACE_FLOW_NUMBER("ini_comment_remove - Returning", error);
     return error;
@@ -370,9 +483,9 @@ int ini_comment_clear(struct ini_comment *ic, uint32_t idx)
 {
     int error = EOK;
 
-    TRACE_FLOW_STRING("ini_comment_clear", "Entry");
+    TRACE_FLOW_ENTRY();
 
-    error = ini_comment_modify(ic, INI_COMMENT_MODE_CLEAR, idx, NULL);
+    error = ini_comment_modify(ic, INI_COMMENT_MODE_CLEAR, idx, NULL, 0);
 
     TRACE_FLOW_NUMBER("ini_comment_clear - Returning", error);
     return error;
@@ -386,9 +499,9 @@ int ini_comment_replace(struct ini_comment *ic,
 {
     int error = EOK;
 
-    TRACE_FLOW_STRING("ini_comment_replace", "Entry");
+    TRACE_FLOW_ENTRY();
 
-    error = ini_comment_modify(ic, INI_COMMENT_MODE_REPLACE, idx, line);
+    error = ini_comment_modify(ic, INI_COMMENT_MODE_REPLACE, idx, line, 0);
 
     TRACE_FLOW_NUMBER("ini_comment_replace - Returning", error);
     return error;
@@ -400,7 +513,7 @@ int ini_comment_reset(struct ini_comment *ic)
 {
     int error = EOK;
 
-    TRACE_FLOW_STRING("ini_comment_reset", "Entry");
+    TRACE_FLOW_ENTRY();
 
     if (!ic) {
         TRACE_ERROR_NUMBER("Invalid comment object", EINVAL);
@@ -413,7 +526,7 @@ int ini_comment_reset(struct ini_comment *ic)
         ic->state = INI_COMMENT_CHANGED;
     }
 
-    TRACE_FLOW_STRING("ini_comment_reset", "Exit");
+    TRACE_FLOW_EXIT();
     return error;
 }
 
@@ -422,7 +535,7 @@ int ini_comment_get_numlines(struct ini_comment *ic, uint32_t *num)
 {
     int error = EOK;
 
-    TRACE_FLOW_STRING("ini_comment_get_numlines", "Entry");
+    TRACE_FLOW_ENTRY();
 
     if ((!ic) || (!num)) {
         TRACE_ERROR_NUMBER("Invalid argument", EINVAL);
@@ -437,23 +550,33 @@ int ini_comment_get_numlines(struct ini_comment *ic, uint32_t *num)
 }
 
 /* Get line */
-int ini_comment_get_line(struct ini_comment *ic, uint32_t idx, char **line)
+int ini_comment_get_line(struct ini_comment *ic, uint32_t idx,
+                         char **line, uint32_t *line_len)
 {
     int error = EOK;
     void *res = NULL;
+    struct simplebuffer *sb = NULL;
+    const unsigned char *ln;
 
-    TRACE_FLOW_STRING("ini_comment_get_line", "Entry");
+    TRACE_FLOW_ENTRY();
 
     if ((!ic) || (!line)) {
         TRACE_ERROR_NUMBER("Invalid argument", EINVAL);
         return EINVAL;
     }
 
-    res = ref_array_get(ic->ra, idx, (void *)line);
+    res = ref_array_get(ic->ra, idx, (void *)&sb);
     if (!res) {
         error = EINVAL;
         *line = NULL;
+        if (line_len) line_len = 0;
     }
+    else {
+        ln = simplebuffer_get_buf(sb);
+        memcpy(line, &ln, sizeof(char *));
+        if (line_len) *line_len = simplebuffer_get_len(sb);
+    }
+
     TRACE_FLOW_NUMBER("ini_comment_get_line - Returning", error);
     return error;
 }
@@ -465,31 +588,138 @@ int ini_comment_swap(struct ini_comment *ic,
 {
     int error = EOK;
 
-    TRACE_FLOW_STRING("ini_comment_swap", "Entry");
+    TRACE_FLOW_ENTRY();
 
     if (!ic) {
         TRACE_ERROR_NUMBER("Invalid argument", EINVAL);
         return EINVAL;
     }
 
-    error = ref_array_swap(ic->ra, idx1, idx2);
-    if ((!error) && (idx1 != idx2)) {
+    if (idx1 != idx2) {
+        if ((error = ref_array_swap(ic->ra, idx1, idx2))) {
+            TRACE_ERROR_NUMBER("Failed to swap", error);
+            return error;
+        }
         ic->state = INI_COMMENT_CHANGED;
     }
 
-    TRACE_FLOW_NUMBER("ini_comment_swap - Returning", error);
+    TRACE_FLOW_EXIT();
     return error;
 }
 
+/* Add one comment to another */
+int ini_comment_add(struct ini_comment *ic_to_add,
+                    struct ini_comment *ic)
+{
+    int error = EOK;
+    struct simplebuffer *sb = NULL;
+    struct simplebuffer *sb_new = NULL;
+    void *res = NULL;
+    uint32_t len = 0;
+    int i;
+
+    TRACE_FLOW_ENTRY();
+
+    len = ref_array_len(ic_to_add->ra);
+
+    for (i = 0; i< len; i++) {
+
+        /* Get data element */
+        res = ref_array_get(ic_to_add->ra, i, (void *)(&sb));
+        if (!res) {
+            TRACE_ERROR_NUMBER("Failed to get comment element", error);
+            return error;
+        }
+
+        /* Create a storage a for a copy */
+        error = simplebuffer_alloc(&sb_new);
+        if (error) {
+            TRACE_ERROR_NUMBER("Allocate buffer for the comment", error);
+            return error;
+        }
+
+        /* Copy actual data */
+        error = simplebuffer_add_str(sb_new,
+                                     (const char *)simplebuffer_get_buf(sb),
+                                     simplebuffer_get_len(sb),
+                                     INI_COMMENT_LEN);
+        if (error) {
+            TRACE_ERROR_NUMBER("Failed to append line to an array", error);
+            simplebuffer_free(sb_new);
+            return error;
+        }
+
+        /* Append it to the array */
+        error = ref_array_append(ic->ra, (void *)&sb_new);
+        if (error) {
+            TRACE_ERROR_NUMBER("Failed to append element to an array", error);
+            simplebuffer_free(sb_new);
+            return error;
+        }
+    }
+
+    TRACE_FLOW_EXIT();
+    return error;
+}
+
+/* Serialize comment */
+int ini_comment_serialize (struct ini_comment *ic,
+                           struct simplebuffer *sbobj)
+{
+    int error = EOK;
+    uint32_t num = 0;
+    uint32_t i = 0;
+    uint32_t len = 0;
+    char *commentline = NULL;
+
+    TRACE_FLOW_ENTRY();
+
+    /* Get number of lines in the comment */
+    error = ini_comment_get_numlines(ic, &num);
+    if (error) {
+        TRACE_ERROR_NUMBER("Failed to get number of lines", error);
+        return error;
+    }
+
+    for (i = 0; i < num; i++) {
+
+        len = 0;
+        commentline = NULL;
+
+        error = ini_comment_get_line(ic, i, &commentline, &len);
+        if (error) {
+            TRACE_ERROR_NUMBER("Failed to get line", error);
+            return error;
+        }
+
+        error = simplebuffer_add_raw(sbobj,
+                                     commentline,
+                                     len,
+                                     INI_VALUE_BLOCK);
+        if (error) {
+            TRACE_ERROR_NUMBER("Failed to add comment", error);
+            return error;
+        }
+
+        error = simplebuffer_add_cr(sbobj);
+        if (error) {
+            TRACE_ERROR_NUMBER("Failed to add CR", error);
+            return error;
+        }
+    }
+
+    TRACE_FLOW_EXIT();
+    return error;
+}
 
 /* Internal function to print comment */
 void ini_comment_print(struct ini_comment *ic, FILE *file)
 {
     int len;
     int i;
-    char *ret = NULL;
+    struct simplebuffer *sb = NULL;
 
-    TRACE_FLOW_STRING("ini_comment_print", "Entry");
+    TRACE_FLOW_ENTRY();
 
     if (!file) {
         TRACE_ERROR_NUMBER("Invalid file argument", EINVAL);
@@ -499,11 +729,10 @@ void ini_comment_print(struct ini_comment *ic, FILE *file)
     if (ic) {
         len = ref_array_len(ic->ra);
         for (i = 0; i < len; i++) {
-            ref_array_get(ic->ra, i, &ret);
-            fprintf(file, "%s\n", ret);
+            ref_array_get(ic->ra, i, (void *)(&sb));
+            fprintf(file, "%s\n", simplebuffer_get_buf(sb));
         }
     }
 
-    TRACE_FLOW_STRING("ini_comment_print", "Exit");
-
+    TRACE_FLOW_EXIT();
 }

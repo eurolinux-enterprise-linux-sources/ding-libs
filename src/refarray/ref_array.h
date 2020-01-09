@@ -6,14 +6,14 @@
     Copyright (C) Dmitri Pal <dpal@redhat.com> 2009
 
     This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
+    it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation; either version 3 of the License, or
     (at your option) any later version.
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-    You should have received a copy of the GNU General Public License
+    You should have received a copy of the GNU Lesser General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
@@ -83,11 +83,34 @@ typedef enum
  *
  * Callback that can be provided by a caller
  * to free data when the storage is actually destroyed.
+ *
+ * @param[in]  elem             Pointer to the array element.
+ * @param[in]  type             Type of the operation performed.
+ * @param[in]  data             Application data that can be used
+ *                              inside the callback.
+ * No return value.
  */
 typedef void (*ref_array_fn)(void *elem,
                              ref_array_del_enum type,
                              void *data);
 
+/**
+ * @brief Copy callback
+ *
+ * Callback that can be provided by a caller
+ * to copy elements of the array.
+ *
+ * @param[in]  elem             Pointer to the array element.
+ * @param[out] new_elem         Pointer to pointer to the new element.
+ *
+ * @return 0 - Success.
+ * @return ENOMEM - No memory.
+ * @return EINVAL - Invalid argument.
+ *
+ * Callback can return other errors and the implementor's discretion.
+ */
+typedef int (*ref_array_copy_cb)(void *elem,
+                                 void *new_elem);
 
 /**
  * @brief Create referenced array
@@ -312,6 +335,49 @@ int ref_array_swap(struct ref_array *ra,
  *
  */
 void ref_array_reset(struct ref_array *ra);
+
+
+/**
+ * @brief Copy array
+ *
+ * Function copies all contents calling a provided
+ * callback for every entry of the array.
+ *
+ *
+ * @param[in]  ra        Existing array object to copy.
+ * @param[in]  copy_cb   Copy callback.
+ * @param[in]  cb        Cleanup callback, will be used
+ *                       to clean data in the array copy.
+ * @param[in]  data      Caller supplied data
+ *                       passed to cleanup callback.
+ * @param[out] copy_ra   Newly allocated copy.
+ *
+ * @return 0 - Success.
+ * @return ENOMEM - No memory.
+ * @return EINVAL - Invalid argument.
+ */
+int ref_array_copy(struct ref_array *ra,
+                   ref_array_copy_cb copy_cb,
+                   ref_array_fn cb,
+                   void *data,
+                   struct ref_array **copy_ra);
+
+
+
+/**
+ * @brief Print array for debugging purposes.
+ *
+ * Prints array internals.
+ *
+ * @param[in]  ra        Existing array object.
+ * @param[in]  num       If num is 0 elements will be printed as strings.
+ *                       If num is greater than 0 elements will be printed as
+ *                       decimal numbers. Otherwise element will not be
+ *                       interpreted in concrete way.
+ *
+ * No return value.
+ */
+void ref_array_debug(struct ref_array *ra, int num);
 
 /**
  * @}

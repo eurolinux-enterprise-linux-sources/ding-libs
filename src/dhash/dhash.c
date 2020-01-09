@@ -40,6 +40,7 @@
 /******************************* Include Files *******************************/
 /*****************************************************************************/
 
+#include "config.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -53,10 +54,13 @@
 #define PRIME_1                 37
 #define PRIME_2                 1048583
 
- /*
-  * Fast arithmetic, relying on powers of 2, and on pre-processor
-  * concatenation property
-  */
+#ifndef MIN
+    #define MIN(a,b) (((a) < (b)) ? (a) : (b))
+#endif
+
+#ifndef MAX
+    #define MAX(a,b) (((a) > (b)) ? (a) : (b))
+#endif
 
 #define halloc(table, size) table->halloc(size, table->halloc_pvt)
 #define hfree(table, ptr) table->hfree(ptr, table->halloc_pvt)
@@ -120,6 +124,14 @@ struct _hash_iter_context_t {
     element_t *p;
 };
 
+enum hash_iter_state {
+    HI_STATE_0,
+    HI_STATE_1,
+    HI_STATE_2,
+    HI_STATE_3A,
+    HI_STATE_3B
+};
+
 /*****************************************************************************/
 /**********************  External Function Declarations  *********************/
 /*****************************************************************************/
@@ -143,7 +155,7 @@ static hash_entry_t *hash_iter_next(struct hash_iter_context_t *iter);
 /*************************  Internal Global Variables  ***********************/
 /*****************************************************************************/
 
-#if DEBUG
+#ifdef DEBUG
 int debug_level = 1;
 #endif
 
@@ -247,7 +259,7 @@ static int expand_table(hash_table_t *table)
 
     if (table->bucket_count < (table->directory_size << table->segment_size_shift)) {
 #ifdef DEBUG
-        if (debug_level >= 1)
+        if (debug_level >= 2)
             fprintf(stderr, "expand_table on entry: bucket_count=%lu, segment_count=%lu p=%lu maxp=%lu\n",
                     table->bucket_count, table->segment_count, table->p, table->maxp);
 #endif
@@ -314,7 +326,7 @@ static int expand_table(hash_table_t *table)
             }
         }
 #ifdef DEBUG
-        if (debug_level >= 1)
+        if (debug_level >= 2)
             fprintf(stderr, "expand_table on exit: bucket_count=%lu, segment_count=%lu p=%lu maxp=%lu\n",
                     table->bucket_count, table->segment_count, table->p, table->maxp);
 #endif
@@ -330,9 +342,9 @@ static int contract_table(hash_table_t *table)
     segment_t *old_segment, *new_segment;
     element_t *current;
 
-    if (table->bucket_count > table->segment_size) {
+    if ((table->bucket_count > table->segment_size) && (table->segment_count > 1)) {
 #ifdef DEBUG
-        if (debug_level >= 1)
+        if (debug_level >= 2)
             fprintf(stderr, "contract_table on entry: bucket_count=%lu, segment_count=%lu p=%lu maxp=%lu\n",
                     table->bucket_count, table->segment_count, table->p, table->maxp);
 #endif
@@ -395,7 +407,7 @@ static int contract_table(hash_table_t *table)
         }
 
 #ifdef DEBUG
-        if (debug_level >= 1)
+        if (debug_level >= 2)
             fprintf(stderr, "contract_table on exit: bucket_count=%lu, segment_count=%lu p=%lu maxp=%lu\n",
                     table->bucket_count, table->segment_count, table->p, table->maxp);
 #endif
@@ -428,7 +440,7 @@ static int lookup(hash_table_t *table, hash_key_t *key, element_t **element_arg,
     current_segment = table->directory[segment_dir];
 
 #ifdef DEBUG
-    if (debug_level >= 2)
+    if (debug_level >= 3)
         fprintf(stderr, "lookup: h=%lu, segment_dir=%lu, segment_index=%lu current_segment=%p\n",
                 h, segment_dir, segment_index, current_segment);
 #endif
@@ -505,19 +517,47 @@ int hash_create_ex(unsigned long count, hash_table_t **tbl,
                    hash_free_func *free_func,
                    void *alloc_private_data,
                    hash_delete_callback *delete_callback,
-                   void *delete_private_data)
-{
+                   void *delete_private_data) {
     unsigned long i;
-    unsigned int n_addr_bits;
+    unsigned int n_addr_bits, requested_bits;
+    unsigned int requested_directory_bits;
+    unsigned int requested_segment_bits;
     address_t addr;
     hash_table_t *table = NULL;
+
+    /* Initialize to NULL in case of an early return due to an error */
+    *tbl = NULL;
 
     if (alloc_func == NULL) alloc_func = sys_malloc_wrapper;
     if (free_func == NULL) free_func = sys_free_wrapper;
 
     /* Compute directory and segment parameters */
-    if (directory_bits == 0) directory_bits = HASH_DEFAULT_DIRECTORY_BITS;
-    if (segment_bits == 0) segment_bits = HASH_DEFAULT_SEGMENT_BITS;
+
+    /* compute power of 2 >= count; it's the number of requested buckets */
+    if (count > 1) {
+        for (requested_bits = 0; (1 << requested_bits) < count; requested_bits++);
+    } else {
+        requested_bits = 1;
+    }
+
+    /*
+     * If caller didn't specify directory & segment allocation then
+     * compute it from the requested count.
+     */
+    if (directory_bits == 0 || segment_bits == 0) {
+        /* Equally divide buckets between the directory and segments */
+        requested_directory_bits = MAX(requested_bits >> 1, 1);
+        requested_segment_bits = MAX(requested_bits - requested_directory_bits, 1);
+
+        /* If the requested count wasn't specified pick a default */
+        if (count == 0) {
+            directory_bits = MAX(requested_directory_bits, HASH_DEFAULT_DIRECTORY_BITS);
+            segment_bits = MAX(requested_segment_bits, HASH_DEFAULT_SEGMENT_BITS);
+        } else {
+            directory_bits = requested_directory_bits;
+            segment_bits = requested_segment_bits;
+        }
+    }
 
     for (addr = ~0, n_addr_bits = 0; addr; addr >>= 1, n_addr_bits++);
 
@@ -534,55 +574,63 @@ int hash_create_ex(unsigned long count, hash_table_t **tbl,
     table->halloc_pvt = alloc_private_data;
 
     table->directory_size_shift = directory_bits;
-    for (i = 0, table->directory_size = 1; i < table->directory_size_shift; i++, table->directory_size <<= 1);
+    table->directory_size = directory_bits ? 1 << directory_bits : 0;
 
     table->segment_size_shift = segment_bits;
-    for (i = 0, table->segment_size = 1; i < table->segment_size_shift; i++, table->segment_size <<= 1);
-
+    table->segment_size = segment_bits ? 1 << segment_bits : 0;
 
     /* Allocate directory */
     table->directory = (segment_t **)halloc(table, table->directory_size * sizeof(segment_t *));
     if (table->directory == NULL) {
+        hash_destroy(table);
         return HASH_ERROR_NO_MEMORY;
     }
     memset(table->directory, 0, table->directory_size * sizeof(segment_t *));
 
     /*
-     * Adjust count to be nearest higher power of 2, minimum SEGMENT_SIZE, then
-     * convert into segments.
+     * If one wanted to pre-allocate all the buckets necessary to meet the needs
+     * of the requested count it would be done like this:
+     *
+     * table->segment_count = MIN((count + table->segment_size-1) / table->segment_size,
+     *                            table->directory_size);
+     *
+     * But with dynamic hash tables there is little point to this, the whole idea is to
+     * allow the table to grow/shrink dynamically, therefore we start with just one
+     * segment of buckets, the minimum necessary.
      */
-    i = table->segment_size;
-    while (i < count)
-        i <<= 1;
-    count = i >> table->segment_size_shift;
-
-    table->segment_count = 0;
+    table->segment_count = 1;
     table->p = 0;
     table->entry_count = 0;
     table->delete_callback = delete_callback;
     table->delete_pvt = delete_private_data;
 
     /*
-     * Allocate initial 'i' segments of buckets
+     * Allocate initial segments of buckets
      */
-    for (i = 0; i < count; i++) {
+    for (i = 0; i < table->segment_count; i++) {
         table->directory[i] = (segment_t *)halloc(table, table->segment_size * sizeof(segment_t));
         if (table->directory[i] == NULL) {
             hash_destroy(table);
             return HASH_ERROR_NO_MEMORY;
         }
         memset(table->directory[i], 0, table->segment_size * sizeof(segment_t));
-        table->segment_count++;
     }
     table->bucket_count = table->segment_count << table->segment_size_shift;
     table->maxp = table->bucket_count;
     table->min_load_factor = min_load_factor == 0 ? HASH_DEFAULT_MIN_LOAD_FACTOR : min_load_factor;
     table->max_load_factor = max_load_factor == 0 ? HASH_DEFAULT_MAX_LOAD_FACTOR : max_load_factor;
 
-#if DEBUG
-    if (debug_level >= 1)
-        fprintf(stderr, "hash_create_ex: table=%p count=%lu maxp=%lu segment_count=%lu\n",
-                table, count, table->maxp, table->segment_count);
+#ifdef DEBUG
+    if (debug_level >= 1) {
+        fprintf(stderr, "hash_create_ex: count=%lu available buckets=%lu bucket_count=%lu maxp=%lu\n",
+                count, table->directory_size*table->segment_size, table->bucket_count, table->maxp);
+        fprintf(stderr, "                directory_bits=%u segment_bits=%u requested_bits=%u\n",
+                directory_bits, segment_bits, requested_bits);
+        fprintf(stderr, "                directory_size=%lu segment_size=%lu segment_count=%lu\n",
+                table->directory_size, table->segment_size, table->segment_count);
+        fprintf(stderr, "                min_load_factor=%lu max_load_factor=%lu\n",
+                table->min_load_factor, table->max_load_factor);
+    }
 #endif
 #ifdef HASH_STATISTICS
     memset(&table->statistics, 0, sizeof(table->statistics));
@@ -613,25 +661,27 @@ int hash_destroy(hash_table_t *table)
     if (!table) return HASH_ERROR_BAD_TABLE;
 
     if (table != NULL) {
-        for (i = 0; i < table->segment_count; i++) {
-            /* test probably unnecessary */
-            if ((s = table->directory[i]) != NULL) {
-                for (j = 0; j < table->segment_size; j++) {
-                    p = s[j];
-                    while (p != NULL) {
-                        q = p->next;
-                        hdelete_callback(table, HASH_TABLE_DESTROY, &p->entry);
-                        if (p->entry.key.type == HASH_KEY_STRING) {
-                            hfree(table, (char *)p->entry.key.str);
+        if (table->directory) {
+            for (i = 0; i < table->segment_count; i++) {
+                /* test probably unnecessary */
+                if ((s = table->directory[i]) != NULL) {
+                    for (j = 0; j < table->segment_size; j++) {
+                        p = s[j];
+                        while (p != NULL) {
+                            q = p->next;
+                            hdelete_callback(table, HASH_TABLE_DESTROY, &p->entry);
+                            if (p->entry.key.type == HASH_KEY_STRING) {
+                                hfree(table, (char *)p->entry.key.str);
+                            }
+                            hfree(table, (char *)p);
+                            p = q;
                         }
-                        hfree(table, (char *)p);
-                        p = q;
                     }
+                    hfree(table, s);
                 }
-                hfree(table, s);
             }
+            hfree(table, table->directory);
         }
-        hfree(table, table->directory);
         hfree(table, table);
         table = NULL;
     }
@@ -666,33 +716,58 @@ int hash_iterate(hash_table_t *table, hash_iterate_callback callback, void *user
 static hash_entry_t *hash_iter_next(struct hash_iter_context_t *iter_arg)
 {
     struct _hash_iter_context_t *iter = (struct _hash_iter_context_t *) iter_arg;
-    hash_entry_t *entry;
+    hash_entry_t *entry = NULL;
+    enum hash_iter_state state = HI_STATE_3A;
 
     if (iter->table == NULL) return NULL;
-    goto state_3a;
 
- state_1:
-    iter->i++;
-    if(iter->i >= iter->table->segment_count) return NULL;
-    /* test probably unnecessary */
-    iter->s = iter->table->directory[iter->i];
-    if (iter->s == NULL) goto state_1;
-    iter->j = 0;
- state_2:
-    if (iter->j >= iter->table->segment_size) goto state_1;
-    iter->p = iter->s[iter->j];
- state_3a:
-    if (iter->p == NULL) goto state_3b;
-    entry = &iter->p->entry;
-    iter->p = iter->p->next;
+    while (state != HI_STATE_0) {
+
+        switch (state) {
+            case HI_STATE_1:
+                iter->i++;
+                if(iter->i >= iter->table->segment_count) return NULL;
+                /* test probably unnecessary */
+                iter->s = iter->table->directory[iter->i];
+                if (iter->s == NULL) {
+                    state = HI_STATE_1;
+                    break;
+                }
+                iter->j = 0;
+                state = HI_STATE_2;
+
+            case HI_STATE_2:
+                if (iter->j >= iter->table->segment_size) {
+                    state = HI_STATE_1;
+                    break;
+                }
+                iter->p = iter->s[iter->j];
+                state = HI_STATE_3A;
+
+            case HI_STATE_3A:
+                if (iter->p == NULL) {
+                    state = HI_STATE_3B;
+                    break;
+                }
+                entry = &iter->p->entry;
+                iter->p = iter->p->next;
+                state = HI_STATE_0;
+                break;
+
+            case HI_STATE_3B:
+                iter->j++;
+                state = HI_STATE_2;
+                break;
+
+            default:
+                /* Should never reach here */
+                fprintf(stderr, "ERROR hash_iter_next reached invalid state\n");
+                return NULL;
+                break;
+        }
+    }
+
     return entry;
- state_3b:
-    iter->j++;
-    goto state_2;
-
-    /* Should never reach here */
-    fprintf(stderr, "ERROR hash_iter_next reached invalid state\n");
-    return NULL;
 }
 
 struct hash_iter_context_t *new_hash_iter_context(hash_table_t *table)
@@ -726,12 +801,13 @@ unsigned long hash_count(hash_table_t *table)
 
 int hash_keys(hash_table_t *table, unsigned long *count_arg, hash_key_t **keys_arg)
 {
-    unsigned long count = table->entry_count;
+    unsigned long count;
     hash_key_t *keys;
     hash_keys_callback_data_t data;
 
     if (!table) return HASH_ERROR_BAD_TABLE;
 
+    count = table->entry_count;
     if (count == 0) {
         *count_arg = 0;
         *keys_arg = NULL;
@@ -757,12 +833,13 @@ int hash_keys(hash_table_t *table, unsigned long *count_arg, hash_key_t **keys_a
 
 int hash_values(hash_table_t *table, unsigned long *count_arg, hash_value_t **values_arg)
 {
-    unsigned long count = table->entry_count;
+    unsigned long count;
     hash_value_t *values;
     hash_values_callback_data_t data;
 
     if (!table) return HASH_ERROR_BAD_TABLE;
 
+    count = table->entry_count;
     if (count == 0) {
         *count_arg = 0;
         *values_arg = NULL;
@@ -801,12 +878,13 @@ static bool hash_entries_callback(hash_entry_t *item, void *user_data)
 
 int hash_entries(hash_table_t *table, unsigned long *count_arg, hash_entry_t **entries_arg)
 {
-    unsigned long count = table->entry_count;
+    unsigned long count;
     hash_entry_t *entries;
     hash_entries_callback_data_t data;
 
     if (!table) return HASH_ERROR_BAD_TABLE;
 
+    count = table->entry_count;
     if (count == 0) {
         *count_arg = 0;
         *entries_arg = NULL;
@@ -847,12 +925,17 @@ int hash_get_default(hash_table_t *table, hash_key_t *key, hash_value_t *value, 
 
     if (!table) return HASH_ERROR_BAD_TABLE;
 
-    if ((error = hash_lookup(table, key, value)) != HASH_SUCCESS) {
-        if ((error = hash_enter(table, key, default_value)) != HASH_SUCCESS) {
+    error = hash_lookup(table, key, value);
+    if (error == HASH_ERROR_KEY_NOT_FOUND) {
+
+        error = hash_enter(table, key, default_value);
+        if (error != HASH_SUCCESS) {
             return error;
         }
         *value = *default_value;
         return HASH_SUCCESS;
+    } else {
+        if (error != HASH_SUCCESS) return error;
     }
 
     return HASH_SUCCESS;

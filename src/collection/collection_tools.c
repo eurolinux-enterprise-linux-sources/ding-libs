@@ -19,7 +19,7 @@
     along with Collection Library.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-
+#include "config.h"
 #include <stdio.h>
 #include <malloc.h>
 #include <errno.h>
@@ -129,8 +129,11 @@ int col_debug_handle(const char *property,
                ((struct collection_header *)(data))->count,
                ((struct collection_header *)(data))->reference_count,
                ((struct collection_header *)(data))->cclass);
+/* Due to padding issues this is unsafe so ifdefed for now */
+#ifdef COL_PRINT_BINARY_HEADER
         for (i = 0; i < length; i++)
             printf("%02X", ((unsigned char *)(data))[i]);
+#endif
         printf(" (%d)\n", nest_level);
         break;
     case COL_TYPE_COLLECTIONREF:
@@ -461,6 +464,11 @@ int col_serialize(const char *property_in,
         len = col_copy_esc(&buf_data->buffer[buf_data->length],
                            (const char *)(data), '"');
         break;
+
+    /* Here and below it is safe to use sprintf() becuase we
+     * already pre-calculated the length and allocated buffer
+     * of the right size.
+     */
 
     case COL_TYPE_BINARY:
         buf_data->buffer[buf_data->length] = '\'';
