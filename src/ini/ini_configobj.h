@@ -344,7 +344,8 @@ enum ERR_PARSE {
 #define INI_MS_OVERWRITE 0x0200
 /** @brief Second section is discarded */
 #define INI_MS_PRESERVE  0x0300
-/** @brief Merge but log errors if duplicate sections are detected */
+/** @brief Log errors if duplicate sections are detected; non-exclusive */
+/** This defaults to MERGE, but can be used with OVERWRITE and PRESERVE **/
 #define INI_MS_DETECT    0x0400
 
 /**
@@ -1026,12 +1027,14 @@ int ini_config_merge(struct ini_cfgobj *first,
  * @param[in]  patterns         List of regular expressions
  *                              that the name of a snippet file
  *                              has to match to be considered
- *                              for merge.
+ *                              for merge. These use POSIX Basic Regular
+ *                              Expressions.
  * @param[in]  sections         List of regular expressions
  *                              that the section names in the snippet
  *                              file need to match. If file contains
  *                              sections that do not match any patterns
  *                              the file is skipped and error is recorded.
+ *                              These use POSIX Basic Regular Expressions.
  * @param[in]  check_perm       Pointer to structure that
  *                              holds criteria for the
  *                              access check.
@@ -2068,7 +2071,7 @@ struct ini_errobj;
  * hold error messages from generators. To add messages to
  * the structure use \ref ini_errobj_add_msg.
  *
- * @param[out] errobj         container for errors.
+ * @param[out] _errobj         container for errors.
  *
  * @return Zero on success, nonzero value in case of error.
  */

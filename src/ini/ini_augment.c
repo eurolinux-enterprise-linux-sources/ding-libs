@@ -21,7 +21,6 @@
     along with INI Library.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define _GNU_SOURCE /* for vasprintf */
 #include "config.h"
 #include <errno.h>
 #include <stdarg.h>
@@ -161,7 +160,7 @@ static int ini_aug_regex_prepare(const char *patterns[],
         for (i = 0; patterns[i] != NULL; i++) {
             pat = patterns[i];
 
-            TRACE_INFO_STRING("Pattern:", *pat);
+            TRACE_INFO_STRING("Pattern:", pat);
 
             preg = calloc(1, sizeof(regex_t));
             if (preg == NULL) {
@@ -185,7 +184,7 @@ static int ini_aug_regex_prepare(const char *patterns[],
                 ini_aug_add_string(ra_err,
                                    "Failed to process expression: %s."
                                    " Compilation returned error: %s",
-                                   *pat, err_str);
+                                   pat, err_str);
                 free(err_str);
 
                 /* All error processing is done - advance to next pattern */
@@ -363,14 +362,11 @@ static int ini_aug_construct_list(char *dirname ,
 
     int error = EOK;
     DIR *dir = NULL;
-    struct dirent *entry = NULL;
     struct dirent *entryp = NULL;
     char *snipname = NULL;
     char fullname[PATH_MAX + 1] = {0};
     struct ref_array *ra_regex = NULL;
     bool match = false;
-    int len = 0;
-    int name_max;
 
     TRACE_FLOW_ENTRY();
 
@@ -399,51 +395,43 @@ static int ini_aug_construct_list(char *dirname ,
         return EOK;
     }
 
-    /* Allocate memory for entry (as said in man pages)*/
-    name_max = pathconf(dirname, _PC_NAME_MAX);
-    if (name_max == -1)          /* Limit not defined, or error */
-        name_max = 1024;         /* Take a guess */
-    len = offsetof(struct dirent, d_name) + name_max + 1;
-    entry = malloc(len);
-    if (entry == NULL) {
-        TRACE_ERROR_NUMBER("Failed to allocate memory.", ENOMEM);
-        ref_array_destroy(ra_regex);
-        closedir(dir);
-        return ENOMEM;
-    }
-
     /* Loop through the directory */
     while (true)
     {
-        error = readdir_r(dir, entry, &entryp);
-        if (error) {
+        errno = 0;
+        entryp = readdir(dir);
+        if (entryp == NULL && errno != 0) {
+            error = errno;
             TRACE_ERROR_NUMBER("Failed to read directory.", error);
             ref_array_destroy(ra_regex);
             closedir(dir);
-            free(entry);
             return error;
         }
 
         /* Stop looping if we reached the end */
         if (entryp == NULL) break;
 
-        TRACE_INFO_STRING("Processing", entry->d_name);
+        TRACE_INFO_STRING("Processing", entryp->d_name);
 
         /* Always skip current and parent dirs */
-        if ((strncmp(entry->d_name,
+        if ((strncmp(entryp->d_name,
                      INI_CURRENT_DIR,
                      sizeof(INI_CURRENT_DIR)) == 0) ||
-            (strncmp(entry->d_name,
+            (strncmp(entryp->d_name,
                      INI_PARENT_DIR,
                      sizeof(INI_PARENT_DIR)) == 0)) continue;
 
+        error = path_concat(fullname, PATH_MAX, dirname, entryp->d_name);
+        if (error != EOK) {
+            TRACE_ERROR_NUMBER("path_concat failed.", error);
+            ref_array_destroy(ra_regex);
+            closedir(dir);
+            return error;
+        }
+
         /* Match names */
-        match = ini_aug_match_name(entry->d_name, ra_regex);
-
+        match = ini_aug_match_name(entryp->d_name, ra_regex);
         if (match) {
-
-            snprintf(fullname, PATH_MAX, "%s/%s", dirname, entry->d_name);
-
             if(ini_check_file_perm(fullname, check_perm, ra_err)) {
 
                 /* Dup name and add to the array */
@@ -453,7 +441,6 @@ static int ini_aug_construct_list(char *dirname ,
                     TRACE_ERROR_NUMBER("Failed to dup string.", ENOMEM);
                     ref_array_destroy(ra_regex);
                     closedir(dir);
-                    free(entry);
                     return ENOMEM;
                 }
 
@@ -464,7 +451,6 @@ static int ini_aug_construct_list(char *dirname ,
                                        ENOMEM);
                     ref_array_destroy(ra_regex);
                     closedir(dir);
-                    free(entry);
                     return ENOMEM;
                 }
             }
@@ -473,11 +459,10 @@ static int ini_aug_construct_list(char *dirname ,
             ini_aug_add_string(ra_err,
                                "File %s did not match provided patterns."
                                " Skipping.",
-                               entry->d_name);
+                               fullname);
         }
     }
 
-    free(entry);
     closedir(dir);
     ref_array_destroy(ra_regex);
 
@@ -679,18 +664,19 @@ static int ini_aug_apply(struct ini_cfgobj *cfg,
 
     TRACE_FLOW_ENTRY();
 
-    len = ref_array_len(ra_list);
-    if (len == 0) {
-        /* List is empty - nothing to do */
-        *out_cfg = NULL;
-        TRACE_FLOW_EXIT();
-        return EOK;
-    }
-
     error = ini_config_copy(cfg, &res_cfg);
     if (error) {
         TRACE_ERROR_NUMBER("Failed to copy config object", error);
+        *out_cfg = NULL;
         return error;
+    }
+
+    len = ref_array_len(ra_list);
+    if (len == 0) {
+        /* List is empty - nothing to do */
+        *out_cfg = res_cfg;
+        TRACE_FLOW_EXIT();
+        return EOK;
     }
 
     /* Prepare patterns */
@@ -699,7 +685,7 @@ static int ini_aug_apply(struct ini_cfgobj *cfg,
                                   &ra_regex);
     if (error) {
         TRACE_ERROR_NUMBER("Failed to prepare regex array.", error);
-        ini_config_destroy(res_cfg);
+        *out_cfg = res_cfg;
         return error;
     }
 
@@ -710,9 +696,7 @@ static int ini_aug_apply(struct ini_cfgobj *cfg,
         error = ini_config_create(&snip_cfg);
         if (error) {
             TRACE_ERROR_NUMBER("Failed to create config object", error);
-            ini_config_destroy(res_cfg);
-            ref_array_destroy(ra_regex);
-            return error;
+            goto err;
         }
 
         /* Process snippet */
@@ -762,9 +746,7 @@ static int ini_aug_apply(struct ini_cfgobj *cfg,
                 if (error) {
                     TRACE_ERROR_NUMBER("Can't get errors.", error);
                     ini_config_destroy(snip_cfg);
-                    ini_config_destroy(res_cfg);
-                    ref_array_destroy(ra_regex);
-                    return error;
+                    goto err;
                 }
 
                 /* Copy errors into error array */
@@ -795,9 +777,7 @@ static int ini_aug_apply(struct ini_cfgobj *cfg,
             if (error) {
                 TRACE_ERROR_NUMBER("Failed to validate section.", error);
                 ini_config_destroy(snip_cfg);
-                ini_config_destroy(res_cfg);
-                ref_array_destroy(ra_regex);
-                return error;
+                goto err;
             }
         }
 
@@ -809,18 +789,18 @@ static int ini_aug_apply(struct ini_cfgobj *cfg,
                 if (error == ENOMEM) {
                     TRACE_ERROR_NUMBER("Merge failed.", error);
                     ini_config_destroy(snip_cfg);
-                    ini_config_destroy(res_cfg);
-                    ref_array_destroy(ra_regex);
-                    return error;
+                    goto err;
                 }
                 else if
                     ((error == EEXIST) &&
-                     ((((merge_flags & INI_MS_MASK) == INI_MS_DETECT) &&
+                     ((ini_flags_have(INI_MS_DETECT, merge_flags) &&
                        ((merge_flags & INI_MV2S_MASK) != INI_MV2S_ERROR)) ||
-                      (((merge_flags & INI_MS_MASK) != INI_MS_ERROR) &&
+                      ((!ini_flags_have(INI_MS_ERROR, merge_flags)) &&
                        ((merge_flags & INI_MV2S_MASK) == INI_MV2S_DETECT)))) {
                         TRACE_ERROR_NUMBER("Got error in detect mode", error);
                         /* Fall through! */
+                    ini_aug_add_string(ra_err, "Duplicate section detected "
+                                       "in snippet: %s.", snip_name);
                 }
                 else {
                     ini_aug_add_string(ra_err,
@@ -849,6 +829,20 @@ static int ini_aug_apply(struct ini_cfgobj *cfg,
     *out_cfg = res_cfg;
     TRACE_FLOW_EXIT();
     return error;
+
+err:
+    ini_config_destroy(res_cfg);
+    ref_array_destroy(ra_regex);
+
+    if (ini_config_copy(cfg, &res_cfg)) {
+        TRACE_ERROR_NUMBER("Failed to copy config object", error);
+        *out_cfg = NULL;
+        return error;
+    }
+
+    *out_cfg = res_cfg;
+
+    return error;
 }
 
 /* Function to merge additional snippets of the config file
@@ -874,8 +868,6 @@ int ini_config_augment(struct ini_cfgobj *base_cfg,
     struct ref_array *ra_err = NULL;
     /* List of files that were merged */
     struct ref_array *ra_ok = NULL;
-    /* Resulting configuration object */
-    struct ini_cfgobj *out_cfg = NULL;
 
     /* Check arguments */
     if (base_cfg == NULL) {
@@ -938,20 +930,10 @@ int ini_config_augment(struct ini_cfgobj *base_cfg,
                           merge_flags,
                           ra_err,
                           ra_ok,
-                          &out_cfg);
-    if (error) {
-        TRACE_ERROR_NUMBER("Failed to process snippet list.",
-                           error);
-        ref_array_destroy(ra_list);
-        ref_array_destroy(ra_err);
-        ref_array_destroy(ra_ok);
-        return error;
-    }
+                          result_cfg);
 
     /* Cleanup */
     ref_array_destroy(ra_list);
-
-    *result_cfg = out_cfg;
 
     if (error_list) {
         *error_list = ra_err;

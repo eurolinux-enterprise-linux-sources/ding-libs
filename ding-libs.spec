@@ -1,22 +1,22 @@
 Name: ding-libs
-Version: 0.6.0
-Release: 27%{?dist}
+Version: 0.6.1
+Release: 29%{?dist}
 Summary: "Ding is not GLib" assorted utility libraries
 Group: Development/Libraries
 License: LGPLv3+
-URL: http://fedorahosted.org/sssd/
-Source0: http://fedorahosted.org/releases/d/i/ding-libs/%{name}-%{version}.tar.gz
+URL: https://pagure.io/SSSD/ding-libs
+Source0: https://releases.pagure.org/SSSD/ding-libs/%{name}-%{version}.tar.gz
 BuildRoot: %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 
 # If a new upstream release changes some, but not all of these
 # version numbers, remember to keep the Release tag in order to
 # allow clean upgrades!
 %global path_utils_version 0.2.1
-%global dhash_version 0.4.3
-%global collection_version 0.6.2
+%global dhash_version 0.5.0
+%global collection_version 0.7.0
 %global ref_array_version 0.1.5
 %global basicobjects_version 0.1.1
-%global ini_config_version 1.3.0
+%global ini_config_version 1.3.1
 
 ### Patches ###
 Patch0001: ding-libs-fake-soname.patch
@@ -140,7 +140,7 @@ time properties
 %{_libdir}/libdhash.so
 %{_libdir}/pkgconfig/dhash.pc
 %doc dhash/README.dhash
-%doc dhash/examples/
+%doc dhash/examples/*.c
 
 
 ##############################################################################
@@ -357,6 +357,14 @@ rm -f */doc/html/installdox
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Mon Jun 27 2016 Michal Židek  <mzidek@redhat.com> - 0.6.1-29
+- Fix rpmdiff failure for 'Binary stripping'
+- Resolves: rhbz#1480270 - Rebase ding-libs to the latest upstream release
+
+* Mon Jun 27 2016 Michal Židek  <mzidek@redhat.com> - 0.6.1-28
+- Re-add the soname hack
+- Resolves: rhbz#1480270 - Rebase ding-libs to the latest upstream release
+
 * Mon Jun 27 2016 Jakub Hrozek <jhrozek@redhat.com> - 0.5.0.1-27
 - Re-add the soname hack
 - Resolves: rhbz#1290382 - Rebase ding-libs to the latest available upstream

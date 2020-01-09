@@ -70,11 +70,13 @@ libpath_utils_la_LDFLAGS = \
 
 if HAVE_CHECK
     check_PROGRAMS += path_utils_ut \
+                      ini_augment_ut_check \
                       ini_configmod_ut_check \
                       ini_parse_ut_check \
                       ini_validators_ut_check \
                       $(NULL)
     TESTS += path_utils_ut \
+             ini_augment_ut_check \
              ini_configmod_ut_check \
              ini_parse_ut_check \
              ini_validators_ut_check \
@@ -108,17 +110,31 @@ dist_include_HEADERS += dhash/dhash.h
 libdhash_la_SOURCES = dhash/dhash.c
 libdhash_la_DEPENDENCIES = dhash/libdhash.sym
 libdhash_la_LDFLAGS = \
-    -version-info 1:2:0 \
+    -version-info 2:0:1 \
     -Wl,--version-script=$(top_srcdir)/dhash/libdhash.sym
 
 check_PROGRAMS += dhash_test dhash_example
 TESTS += dhash_test dhash_example
+
+if HAVE_CHECK
+    check_PROGRAMS += dhash_ut_check
+    TESTS += dhash_ut_check
+endif
+
 
 dhash_test_SOURCES = dhash/examples/dhash_test.c
 dhash_test_LDADD = libdhash.la
 
 dhash_example_SOURCES = dhash/examples/dhash_example.c
 dhash_example_LDADD = libdhash.la
+
+dhash_ut_check_SOURCES = dhash/dhash_ut_check.c
+dhash_ut_chech_CFLAGS = $(AM_CFLAGS) \
+                        $(CHECK_CFLAGS) \
+                        $(NULL)
+dhash_ut_check_LDADD = libdhash.la \
+                       $(CHECK_LIBS) \
+                       $(NULL)
 
 dist_examples_DATA += \
     dhash/examples/dhash_test.c \
@@ -150,7 +166,7 @@ libcollection_la_SOURCES = \
     trace/trace.h
 libcollection_la_DEPENDENCIES = collection/libcollection.sym
 libcollection_la_LDFLAGS = \
-    -version-info 5:0:1 \
+    -version-info 5:1:1 \
     -Wl,--version-script=$(top_srcdir)/collection/libcollection.sym
 
 check_PROGRAMS += \
@@ -276,7 +292,7 @@ libini_config_la_LIBADD = \
     libref_array.la \
     libbasicobjects.la
 libini_config_la_LDFLAGS = \
-    -version-info 7:0:2 \
+    -version-info 7:1:2 \
     -Wl,--version-script=$(top_srcdir)/ini/libini_config.sym
 
 dist_noinst_DATA += \
@@ -348,6 +364,11 @@ ini_augment_ut_LDADD = libini_config.la libcollection.la \
 ini_configmod_ut_SOURCES = ini/ini_configmod_ut.c
 ini_configmod_ut_LDADD = libini_config.la libcollection.la \
                          libbasicobjects.la libpath_utils.la libref_array.la
+
+ini_augment_ut_check_SOURCES = ini/ini_augment_ut_check.c
+ini_augment_ut_check_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS)
+ini_augment_ut_check_LDADD = libini_config.la $(CHECK_LIBS) \
+                             libref_array.la
 
 ini_configmod_ut_check_SOURCES = ini/ini_configmod_ut_check.c
 ini_configmod_ut_check_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS)

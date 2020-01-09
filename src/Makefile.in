@@ -96,7 +96,7 @@ host_triplet = @host@
 @HAVE_GCC_TRUE@        -Wno-sign-compare -Wformat-security -Wmissing-prototypes -Wundef
 
 check_PROGRAMS = $(am__EXEEXT_1) dhash_test$(EXEEXT) \
-	dhash_example$(EXEEXT) collection_ut$(EXEEXT) \
+	dhash_example$(EXEEXT) $(am__EXEEXT_2) collection_ut$(EXEEXT) \
 	collection_stack_ut$(EXEEXT) collection_queue_ut$(EXEEXT) \
 	ref_array_ut$(EXEEXT) simplebuffer_ut$(EXEEXT) \
 	ini_config_ut$(EXEEXT) ini_comment_ut$(EXEEXT) \
@@ -104,24 +104,29 @@ check_PROGRAMS = $(am__EXEEXT_1) dhash_test$(EXEEXT) \
 	ini_augment_ut$(EXEEXT) ini_configmod_ut$(EXEEXT) \
 	ini_save_ut$(EXEEXT)
 TESTS = $(am__EXEEXT_1) dhash_test$(EXEEXT) dhash_example$(EXEEXT) \
-	collection_ut$(EXEEXT) collection_stack_ut$(EXEEXT) \
-	collection_queue_ut$(EXEEXT) ref_array_ut$(EXEEXT) \
-	simplebuffer_ut$(EXEEXT) ini_config_ut$(EXEEXT) \
-	ini_comment_ut$(EXEEXT) ini_valueobj_ut$(EXEEXT) \
-	ini_parse_ut$(EXEEXT) ini_augment_ut$(EXEEXT) \
-	ini_configmod_ut$(EXEEXT) ini_save_ut$(EXEEXT)
+	$(am__EXEEXT_2) collection_ut$(EXEEXT) \
+	collection_stack_ut$(EXEEXT) collection_queue_ut$(EXEEXT) \
+	ref_array_ut$(EXEEXT) simplebuffer_ut$(EXEEXT) \
+	ini_config_ut$(EXEEXT) ini_comment_ut$(EXEEXT) \
+	ini_valueobj_ut$(EXEEXT) ini_parse_ut$(EXEEXT) \
+	ini_augment_ut$(EXEEXT) ini_configmod_ut$(EXEEXT) \
+	ini_save_ut$(EXEEXT)
 @HAVE_CHECK_TRUE@am__append_2 = path_utils_ut \
+@HAVE_CHECK_TRUE@                      ini_augment_ut_check \
 @HAVE_CHECK_TRUE@                      ini_configmod_ut_check \
 @HAVE_CHECK_TRUE@                      ini_parse_ut_check \
 @HAVE_CHECK_TRUE@                      ini_validators_ut_check \
 @HAVE_CHECK_TRUE@                      $(NULL)
 
 @HAVE_CHECK_TRUE@am__append_3 = path_utils_ut \
+@HAVE_CHECK_TRUE@             ini_augment_ut_check \
 @HAVE_CHECK_TRUE@             ini_configmod_ut_check \
 @HAVE_CHECK_TRUE@             ini_parse_ut_check \
 @HAVE_CHECK_TRUE@             ini_validators_ut_check \
 @HAVE_CHECK_TRUE@             $(NULL)
 
+@HAVE_CHECK_TRUE@am__append_4 = dhash_ut_check
+@HAVE_CHECK_TRUE@am__append_5 = dhash_ut_check
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
@@ -234,9 +239,11 @@ libref_array_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(AM_CFLAGS) $(CFLAGS) $(libref_array_la_LDFLAGS) $(LDFLAGS) \
 	-o $@
 @HAVE_CHECK_TRUE@am__EXEEXT_1 = path_utils_ut$(EXEEXT) \
+@HAVE_CHECK_TRUE@	ini_augment_ut_check$(EXEEXT) \
 @HAVE_CHECK_TRUE@	ini_configmod_ut_check$(EXEEXT) \
 @HAVE_CHECK_TRUE@	ini_parse_ut_check$(EXEEXT) \
 @HAVE_CHECK_TRUE@	ini_validators_ut_check$(EXEEXT)
+@HAVE_CHECK_TRUE@am__EXEEXT_2 = dhash_ut_check$(EXEEXT)
 am_collection_queue_ut_OBJECTS =  \
 	collection/collection_queue_ut.$(OBJEXT)
 collection_queue_ut_OBJECTS = $(am_collection_queue_ut_OBJECTS)
@@ -254,10 +261,23 @@ dhash_example_DEPENDENCIES = libdhash.la
 am_dhash_test_OBJECTS = dhash/examples/dhash_test.$(OBJEXT)
 dhash_test_OBJECTS = $(am_dhash_test_OBJECTS)
 dhash_test_DEPENDENCIES = libdhash.la
+am_dhash_ut_check_OBJECTS = dhash/dhash_ut_check.$(OBJEXT)
+dhash_ut_check_OBJECTS = $(am_dhash_ut_check_OBJECTS)
+am__DEPENDENCIES_1 =
+dhash_ut_check_DEPENDENCIES = libdhash.la $(am__DEPENDENCIES_1)
 am_ini_augment_ut_OBJECTS = ini/ini_augment_ut.$(OBJEXT)
 ini_augment_ut_OBJECTS = $(am_ini_augment_ut_OBJECTS)
 ini_augment_ut_DEPENDENCIES = libini_config.la libcollection.la \
 	libbasicobjects.la libpath_utils.la libref_array.la
+am_ini_augment_ut_check_OBJECTS =  \
+	ini/ini_augment_ut_check-ini_augment_ut_check.$(OBJEXT)
+ini_augment_ut_check_OBJECTS = $(am_ini_augment_ut_check_OBJECTS)
+ini_augment_ut_check_DEPENDENCIES = libini_config.la \
+	$(am__DEPENDENCIES_1) libref_array.la
+ini_augment_ut_check_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
+	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
+	$(ini_augment_ut_check_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
+	$(LDFLAGS) -o $@
 am_ini_comment_ut_OBJECTS = ini/ini_comment_ut.$(OBJEXT)
 ini_comment_ut_OBJECTS = $(am_ini_comment_ut_OBJECTS)
 ini_comment_ut_DEPENDENCIES = libini_config.la
@@ -271,7 +291,6 @@ ini_configmod_ut_DEPENDENCIES = libini_config.la libcollection.la \
 am_ini_configmod_ut_check_OBJECTS =  \
 	ini/ini_configmod_ut_check-ini_configmod_ut_check.$(OBJEXT)
 ini_configmod_ut_check_OBJECTS = $(am_ini_configmod_ut_check_OBJECTS)
-am__DEPENDENCIES_1 =
 ini_configmod_ut_check_DEPENDENCIES = libini_config.la \
 	libcollection.la libbasicobjects.la libpath_utils.la \
 	libref_array.la $(am__DEPENDENCIES_1)
@@ -361,7 +380,8 @@ SOURCES = $(libbasicobjects_la_SOURCES) $(libcollection_la_SOURCES) \
 	$(libpath_utils_la_SOURCES) $(libref_array_la_SOURCES) \
 	$(collection_queue_ut_SOURCES) $(collection_stack_ut_SOURCES) \
 	$(collection_ut_SOURCES) $(dhash_example_SOURCES) \
-	$(dhash_test_SOURCES) $(ini_augment_ut_SOURCES) \
+	$(dhash_test_SOURCES) $(dhash_ut_check_SOURCES) \
+	$(ini_augment_ut_SOURCES) $(ini_augment_ut_check_SOURCES) \
 	$(ini_comment_ut_SOURCES) $(ini_config_ut_SOURCES) \
 	$(ini_configmod_ut_SOURCES) $(ini_configmod_ut_check_SOURCES) \
 	$(ini_parse_ut_SOURCES) $(ini_parse_ut_check_SOURCES) \
@@ -374,7 +394,8 @@ DIST_SOURCES = $(libbasicobjects_la_SOURCES) \
 	$(libref_array_la_SOURCES) $(collection_queue_ut_SOURCES) \
 	$(collection_stack_ut_SOURCES) $(collection_ut_SOURCES) \
 	$(dhash_example_SOURCES) $(dhash_test_SOURCES) \
-	$(ini_augment_ut_SOURCES) $(ini_comment_ut_SOURCES) \
+	$(dhash_ut_check_SOURCES) $(ini_augment_ut_SOURCES) \
+	$(ini_augment_ut_check_SOURCES) $(ini_comment_ut_SOURCES) \
 	$(ini_config_ut_SOURCES) $(ini_configmod_ut_SOURCES) \
 	$(ini_configmod_ut_check_SOURCES) $(ini_parse_ut_SOURCES) \
 	$(ini_parse_ut_check_SOURCES) $(ini_save_ut_SOURCES) \
@@ -671,6 +692,7 @@ LIBTOOL = @LIBTOOL@
 LIPO = @LIPO@
 LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
+LT_SYS_LIBRARY_PATH = @LT_SYS_LIBRARY_PATH@
 MAKEINFO = @MAKEINFO@
 MANIFEST_TOOL = @MANIFEST_TOOL@
 MKDIR_P = @MKDIR_P@
@@ -846,13 +868,22 @@ path_utils_ut_LDADD = \
 libdhash_la_SOURCES = dhash/dhash.c
 libdhash_la_DEPENDENCIES = dhash/libdhash.sym
 libdhash_la_LDFLAGS = \
-    -version-info 1:2:0 \
+    -version-info 2:0:1 \
     -Wl,--version-script=$(top_srcdir)/dhash/libdhash.sym
 
 dhash_test_SOURCES = dhash/examples/dhash_test.c
 dhash_test_LDADD = libdhash.la
 dhash_example_SOURCES = dhash/examples/dhash_example.c
 dhash_example_LDADD = libdhash.la
+dhash_ut_check_SOURCES = dhash/dhash_ut_check.c
+dhash_ut_chech_CFLAGS = $(AM_CFLAGS) \
+                        $(CHECK_CFLAGS) \
+                        $(NULL)
+
+dhash_ut_check_LDADD = libdhash.la \
+                       $(CHECK_LIBS) \
+                       $(NULL)
+
 libcollection_la_SOURCES = \
     collection/collection.c \
     collection/collection_tools.c \
@@ -866,7 +897,7 @@ libcollection_la_SOURCES = \
 
 libcollection_la_DEPENDENCIES = collection/libcollection.sym
 libcollection_la_LDFLAGS = \
-    -version-info 5:0:1 \
+    -version-info 5:1:1 \
     -Wl,--version-script=$(top_srcdir)/collection/libcollection.sym
 
 collection_ut_SOURCES = collection/collection_ut.c
@@ -933,7 +964,7 @@ libini_config_la_LIBADD = \
     libbasicobjects.la
 
 libini_config_la_LDFLAGS = \
-    -version-info 7:0:2 \
+    -version-info 7:1:2 \
     -Wl,--version-script=$(top_srcdir)/ini/libini_config.sym
 
 ini_config_ut_SOURCES = ini/ini_config_ut.c
@@ -954,6 +985,11 @@ ini_augment_ut_LDADD = libini_config.la libcollection.la \
 ini_configmod_ut_SOURCES = ini/ini_configmod_ut.c
 ini_configmod_ut_LDADD = libini_config.la libcollection.la \
                          libbasicobjects.la libpath_utils.la libref_array.la
+
+ini_augment_ut_check_SOURCES = ini/ini_augment_ut_check.c
+ini_augment_ut_check_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS)
+ini_augment_ut_check_LDADD = libini_config.la $(CHECK_LIBS) \
+                             libref_array.la
 
 ini_configmod_ut_check_SOURCES = ini/ini_configmod_ut_check.c
 ini_configmod_ut_check_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS)
@@ -1233,12 +1269,24 @@ dhash/examples/dhash_test.$(OBJEXT): dhash/examples/$(am__dirstamp) \
 dhash_test$(EXEEXT): $(dhash_test_OBJECTS) $(dhash_test_DEPENDENCIES) $(EXTRA_dhash_test_DEPENDENCIES) 
 	@rm -f dhash_test$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(dhash_test_OBJECTS) $(dhash_test_LDADD) $(LIBS)
+dhash/dhash_ut_check.$(OBJEXT): dhash/$(am__dirstamp) \
+	dhash/$(DEPDIR)/$(am__dirstamp)
+
+dhash_ut_check$(EXEEXT): $(dhash_ut_check_OBJECTS) $(dhash_ut_check_DEPENDENCIES) $(EXTRA_dhash_ut_check_DEPENDENCIES) 
+	@rm -f dhash_ut_check$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(dhash_ut_check_OBJECTS) $(dhash_ut_check_LDADD) $(LIBS)
 ini/ini_augment_ut.$(OBJEXT): ini/$(am__dirstamp) \
 	ini/$(DEPDIR)/$(am__dirstamp)
 
 ini_augment_ut$(EXEEXT): $(ini_augment_ut_OBJECTS) $(ini_augment_ut_DEPENDENCIES) $(EXTRA_ini_augment_ut_DEPENDENCIES) 
 	@rm -f ini_augment_ut$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(ini_augment_ut_OBJECTS) $(ini_augment_ut_LDADD) $(LIBS)
+ini/ini_augment_ut_check-ini_augment_ut_check.$(OBJEXT):  \
+	ini/$(am__dirstamp) ini/$(DEPDIR)/$(am__dirstamp)
+
+ini_augment_ut_check$(EXEEXT): $(ini_augment_ut_check_OBJECTS) $(ini_augment_ut_check_DEPENDENCIES) $(EXTRA_ini_augment_ut_check_DEPENDENCIES) 
+	@rm -f ini_augment_ut_check$(EXEEXT)
+	$(AM_V_CCLD)$(ini_augment_ut_check_LINK) $(ini_augment_ut_check_OBJECTS) $(ini_augment_ut_check_LDADD) $(LIBS)
 ini/ini_comment_ut.$(OBJEXT): ini/$(am__dirstamp) \
 	ini/$(DEPDIR)/$(am__dirstamp)
 
@@ -1345,10 +1393,12 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@collection/$(DEPDIR)/collection_tools.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@collection/$(DEPDIR)/collection_ut.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@dhash/$(DEPDIR)/dhash.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@dhash/$(DEPDIR)/dhash_ut_check.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@dhash/examples/$(DEPDIR)/dhash_example.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@dhash/examples/$(DEPDIR)/dhash_test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@ini/$(DEPDIR)/ini_augment.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@ini/$(DEPDIR)/ini_augment_ut.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@ini/$(DEPDIR)/ini_augment_ut_check-ini_augment_ut_check.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@ini/$(DEPDIR)/ini_comment.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@ini/$(DEPDIR)/ini_comment_ut.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@ini/$(DEPDIR)/ini_config.Plo@am__quote@
@@ -1402,6 +1452,20 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LTCOMPILE) -c -o $@ $<
+
+ini/ini_augment_ut_check-ini_augment_ut_check.o: ini/ini_augment_ut_check.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ini_augment_ut_check_CFLAGS) $(CFLAGS) -MT ini/ini_augment_ut_check-ini_augment_ut_check.o -MD -MP -MF ini/$(DEPDIR)/ini_augment_ut_check-ini_augment_ut_check.Tpo -c -o ini/ini_augment_ut_check-ini_augment_ut_check.o `test -f 'ini/ini_augment_ut_check.c' || echo '$(srcdir)/'`ini/ini_augment_ut_check.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) ini/$(DEPDIR)/ini_augment_ut_check-ini_augment_ut_check.Tpo ini/$(DEPDIR)/ini_augment_ut_check-ini_augment_ut_check.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='ini/ini_augment_ut_check.c' object='ini/ini_augment_ut_check-ini_augment_ut_check.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ini_augment_ut_check_CFLAGS) $(CFLAGS) -c -o ini/ini_augment_ut_check-ini_augment_ut_check.o `test -f 'ini/ini_augment_ut_check.c' || echo '$(srcdir)/'`ini/ini_augment_ut_check.c
+
+ini/ini_augment_ut_check-ini_augment_ut_check.obj: ini/ini_augment_ut_check.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ini_augment_ut_check_CFLAGS) $(CFLAGS) -MT ini/ini_augment_ut_check-ini_augment_ut_check.obj -MD -MP -MF ini/$(DEPDIR)/ini_augment_ut_check-ini_augment_ut_check.Tpo -c -o ini/ini_augment_ut_check-ini_augment_ut_check.obj `if test -f 'ini/ini_augment_ut_check.c'; then $(CYGPATH_W) 'ini/ini_augment_ut_check.c'; else $(CYGPATH_W) '$(srcdir)/ini/ini_augment_ut_check.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) ini/$(DEPDIR)/ini_augment_ut_check-ini_augment_ut_check.Tpo ini/$(DEPDIR)/ini_augment_ut_check-ini_augment_ut_check.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='ini/ini_augment_ut_check.c' object='ini/ini_augment_ut_check-ini_augment_ut_check.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ini_augment_ut_check_CFLAGS) $(CFLAGS) -c -o ini/ini_augment_ut_check-ini_augment_ut_check.obj `if test -f 'ini/ini_augment_ut_check.c'; then $(CYGPATH_W) 'ini/ini_augment_ut_check.c'; else $(CYGPATH_W) '$(srcdir)/ini/ini_augment_ut_check.c'; fi`
 
 ini/ini_configmod_ut_check-ini_configmod_ut_check.o: ini/ini_configmod_ut_check.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ini_configmod_ut_check_CFLAGS) $(CFLAGS) -MT ini/ini_configmod_ut_check-ini_configmod_ut_check.o -MD -MP -MF ini/$(DEPDIR)/ini_configmod_ut_check-ini_configmod_ut_check.Tpo -c -o ini/ini_configmod_ut_check-ini_configmod_ut_check.o `test -f 'ini/ini_configmod_ut_check.c' || echo '$(srcdir)/'`ini/ini_configmod_ut_check.c
@@ -1765,6 +1829,13 @@ path_utils_ut.log: path_utils_ut$(EXEEXT)
 	--log-file $$b.log --trs-file $$b.trs \
 	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
 	"$$tst" $(AM_TESTS_FD_REDIRECT)
+ini_augment_ut_check.log: ini_augment_ut_check$(EXEEXT)
+	@p='ini_augment_ut_check$(EXEEXT)'; \
+	b='ini_augment_ut_check'; \
+	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
+	--log-file $$b.log --trs-file $$b.trs \
+	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
+	"$$tst" $(AM_TESTS_FD_REDIRECT)
 ini_configmod_ut_check.log: ini_configmod_ut_check$(EXEEXT)
 	@p='ini_configmod_ut_check$(EXEEXT)'; \
 	b='ini_configmod_ut_check'; \
@@ -1796,6 +1867,13 @@ dhash_test.log: dhash_test$(EXEEXT)
 dhash_example.log: dhash_example$(EXEEXT)
 	@p='dhash_example$(EXEEXT)'; \
 	b='dhash_example'; \
+	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
+	--log-file $$b.log --trs-file $$b.trs \
+	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
+	"$$tst" $(AM_TESTS_FD_REDIRECT)
+dhash_ut_check.log: dhash_ut_check$(EXEEXT)
+	@p='dhash_ut_check$(EXEEXT)'; \
+	b='dhash_ut_check'; \
 	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
 	--log-file $$b.log --trs-file $$b.trs \
 	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
@@ -1939,7 +2017,7 @@ distdir: $(DISTFILES)
 	  ! -type d ! -perm -444 -exec $(install_sh) -c -m a+r {} {} \; \
 	|| chmod -R a+r "$(distdir)"
 dist-gzip: distdir
-	tardir=$(distdir) && $(am__tar) | GZIP=$(GZIP_ENV) gzip -c >$(distdir).tar.gz
+	tardir=$(distdir) && $(am__tar) | eval GZIP= gzip $(GZIP_ENV) -c >$(distdir).tar.gz
 	$(am__post_remove_distdir)
 
 dist-bzip2: distdir
@@ -1965,7 +2043,7 @@ dist-shar: distdir
 	@echo WARNING: "Support for shar distribution archives is" \
 	               "deprecated." >&2
 	@echo WARNING: "It will be removed altogether in Automake 2.0" >&2
-	shar $(distdir) | GZIP=$(GZIP_ENV) gzip -c >$(distdir).shar.gz
+	shar $(distdir) | eval GZIP= gzip $(GZIP_ENV) -c >$(distdir).shar.gz
 	$(am__post_remove_distdir)
 
 dist-zip: distdir
@@ -1983,7 +2061,7 @@ dist dist-all:
 distcheck: dist
 	case '$(DIST_ARCHIVES)' in \
 	*.tar.gz*) \
-	  GZIP=$(GZIP_ENV) gzip -dc $(distdir).tar.gz | $(am__untar) ;;\
+	  eval GZIP= gzip $(GZIP_ENV) -dc $(distdir).tar.gz | $(am__untar) ;;\
 	*.tar.bz2*) \
 	  bzip2 -dc $(distdir).tar.bz2 | $(am__untar) ;;\
 	*.tar.lz*) \
@@ -1993,7 +2071,7 @@ distcheck: dist
 	*.tar.Z*) \
 	  uncompress -c $(distdir).tar.Z | $(am__untar) ;;\
 	*.shar.gz*) \
-	  GZIP=$(GZIP_ENV) gzip -dc $(distdir).shar.gz | unshar ;;\
+	  eval GZIP= gzip $(GZIP_ENV) -dc $(distdir).shar.gz | unshar ;;\
 	*.zip*) \
 	  unzip $(distdir).zip ;;\
 	esac
