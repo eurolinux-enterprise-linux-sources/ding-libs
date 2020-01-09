@@ -1,6 +1,6 @@
 Name: ding-libs
 Version: 0.1.2
-Release: 6%{?dist}
+Release: 9%{?dist}
 Summary: "Ding is not GLib" assorted utility libraries
 Group: Development/Libraries
 License: LGPLv3+
@@ -16,6 +16,8 @@ BuildRoot: %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 
 ### Patches ###
 Patch0001: 0001-Fix-license-text-for-several-files-that-should-be-LG.patch
+Patch0002: 0002-Resolves-bug-735464-Fix-the-loop-limit-used-to-initi.patch
+Patch0003: 0003-Fix-stack-smashing-error-in-path_utils.patch
 
 ### Dependencies ###
 
@@ -257,6 +259,8 @@ structure
 %prep
 %setup -q
 %patch0001 -p1
+%patch0002 -p1
+%patch0003 -p1
 
 %build
 %configure \
@@ -290,6 +294,18 @@ rm -f */doc/html/installdox
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Thu Mar 29 2012 Stephen Gallagher <sgallagh@redhat.com> - 0.1.2-9
+- Resolves: rhbz#801393 - Off-by-one error causing stack smashing in path_utils
+
+* Thu Feb 10 2012 Stephen Gallagher <sgallagh@redhat.com> - 0.1.2-8
+- Fix bad patch
+- Related:  rhbz#736074 - dhash can corrupt memory if initial table size is
+                          large
+
+* Thu Feb 09 2012 Stephen Gallagher <sgallagh@redhat.com> - 0.1.2-7
+- Resolves: rhbz#736074 - dhash can corrupt memory if initial table size is
+                          large
+
 * Thu Jan 20 2011 Stephen Gallagher <sgallagh@redhat.com> - 0.1.2-6
 - Resolves: rhbz#668586 - ding-libs subpackages should have explicit version
 -                         requirements
