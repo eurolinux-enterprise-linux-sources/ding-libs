@@ -1,0 +1,74 @@
+From 7099295e99467fdf66f3e6da86c8e8b972960219 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Michal=20=C5=BDidek?= <mzidek@redhat.com>
+Date: Wed, 30 Aug 2017 15:27:23 +0200
+Subject: [PATCH 01/21] INI: Allow longer values then PATH_MAX
+
+The older API used fgets to read the values and the
+size of buffer to hold the line was fixed. With the
+new API we use getline to get the whole line and this
+does not require pre-allocated buffer. The check
+for lenght was not necessary here.
+
+Resolves:
+https://pagure.io/SSSD/ding-libs/issue/3177
+
+Reviewed-by: Jakub Hrozek <jhrozek@redhat.com>
+
+Merges: https://pagure.io/SSSD/ding-libs/pull-request/3178
+---
+ ini/ini_parse.c | 37 ++++++++++++++-----------------------
+ 1 file changed, 14 insertions(+), 23 deletions(-)
+
+diff --git a/ini/ini_parse.c b/ini/ini_parse.c
+index 55891ec..8d50725 100644
+--- a/ini/ini_parse.c
++++ b/ini/ini_parse.c
+@@ -338,31 +338,22 @@ static int parser_read(struct parser_obj *po)
+             free(buffer);
+         }
+         else {
+-            /* Check length */
+-            if (len >= BUFFER_SIZE) {
+-                TRACE_ERROR_STRING("Too long", "");
+-                action = PARSE_ERROR;
+-                po->last_error = ERR_LONGDATA;
+-                free(buffer);
++            /* Trim end line */
++            i = len - 1;
++            while ((i >= 0) &&
++                   ((buffer[i] == '\r') ||
++                    (buffer[i] == '\n'))) {
++                TRACE_INFO_NUMBER("Offset:", i);
++                TRACE_INFO_NUMBER("Code:", buffer[i]);
++                buffer[i] = '\0';
++                i--;
+             }
+-            else {
+-                /* Trim end line */
+-                i = len - 1;
+-                while ((i >= 0) &&
+-                       ((buffer[i] == '\r') ||
+-                        (buffer[i] == '\n'))) {
+-                    TRACE_INFO_NUMBER("Offset:", i);
+-                    TRACE_INFO_NUMBER("Code:", buffer[i]);
+-                    buffer[i] = '\0';
+-                    i--;
+-                }
+ 
+-                po->last_read = buffer;
+-                po->last_read_len = i + 1;
+-                action = PARSE_INSPECT;
+-                TRACE_INFO_STRING("Line:", po->last_read);
+-                TRACE_INFO_NUMBER("Linelen:", po->last_read_len);
+-            }
++            po->last_read = buffer;
++            po->last_read_len = i + 1;
++            action = PARSE_INSPECT;
++            TRACE_INFO_STRING("Line:", po->last_read);
++            TRACE_INFO_NUMBER("Linelen:", po->last_read_len);
+         }
+     }
+ 
+-- 
+2.9.5
+

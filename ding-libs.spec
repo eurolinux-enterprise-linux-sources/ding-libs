@@ -1,6 +1,6 @@
 Name: ding-libs
 Version: 0.4.0
-Release: 11%{?dist}.1
+Release: 13%{?dist}
 Summary: "Ding is not GLib" assorted utility libraries
 Group: Development/Libraries
 License: LGPLv3+
@@ -21,6 +21,7 @@ BuildRoot: %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 ### Patches ###
 Patch0001: 0001-ini_parse-Add-missing-TRACE_FLOW_EXIT.patch
 Patch0002: 0002-ini-Add-INI_PARSE_IGNORE_NON_KVP-flag.patch
+Patch0003: 0003-INI-Allow-longer-values-then-PATH_MAX.patch
 
 ### Dependencies ###
 # ding-libs is a meta-package that will pull in all of its own
@@ -362,8 +363,12 @@ rm -f */doc/html/installdox
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Thu Feb 08 2018 Michal Zidek <mzidek@redhat.com> - 0.4.0-13
+- Resolves: rhbz#1538061 - sssd/libini_config" cannot parse configuration file
+                           with line longer than 5102
+
 * Tue Sep 27 2016 Jakub Hrozek <jhrozek@redhat.com> - 0.4.0-12
-- Related: rhbz#1379582 - ding-libs don't parse lines without an equal sign
+- Related: rhbz#1377213 - ding-libs don't parse lines without an equal sign
 
 * Thu Jun 03 2014 Jakub Hrozek <jhrozek@redhat.com> - 0.4.0-11
 - Do not package built objects in dhash-devel
