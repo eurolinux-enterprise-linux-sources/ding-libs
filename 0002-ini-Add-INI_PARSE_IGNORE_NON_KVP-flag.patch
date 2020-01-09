@@ -1,0 +1,84 @@
+From 9591b1d8adbf195c40c123b1b5125db82e049a56 Mon Sep 17 00:00:00 2001
+From: Dmitri Pal <dpal@redhat.com>
+Date: Wed, 13 Apr 2016 11:44:44 +0200
+Subject: [PATCH 2/3] ini: Add INI_PARSE_IGNORE_NON_KVP flag
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Ticket:
+https://fedorahosted.org/sssd/ticket/2751
+
+Add INI_PARSE_IGNORE_NON_KVP flag to
+allow skipping lines that are not
+key-value pairs.
+
+Reviewed-by: Lukáš Slebodník <lslebodn@redhat.com>
+---
+ ini/ini_configobj.h |  2 ++
+ ini/ini_parse.c     | 29 ++++++++++++++++++++++++-----
+ 2 files changed, 26 insertions(+), 5 deletions(-)
+
+diff --git a/ini/ini_configobj.h b/ini/ini_configobj.h
+index 6f2d692..12920db 100644
+--- a/ini/ini_configobj.h
++++ b/ini/ini_configobj.h
+@@ -363,6 +363,8 @@ enum ERR_PARSE {
+ #define INI_PARSE_NOTAB            0x0004
+ /** @brief Do not allow C-style comments */
+ #define INI_PARSE_NO_C_COMMENTS    0x0008
++/** @brief Skip lines that are not KVPs */
++#define INI_PARSE_IGNORE_NON_KVP    0x0010
+ 
+ /**
+  * @}
+diff --git a/ini/ini_parse.c b/ini/ini_parse.c
+index 0de4e35..e5baeca 100644
+--- a/ini/ini_parse.c
++++ b/ini/ini_parse.c
+@@ -966,8 +966,18 @@ static int handle_kvp(struct parser_obj *po, uint32_t *action)
+     /* Check if we have the key */
+     if (*(str) == '=') {
+         TRACE_ERROR_STRING("No key", str);
+-        po->last_error = ERR_NOKEY;
+-        *action = PARSE_ERROR;
++
++        if (po->parse_flags & INI_PARSE_IGNORE_NON_KVP) {
++        /* Clean everything as if nothing happened  */
++            free(po->last_read);
++            po->last_read = NULL;
++            po->last_read_len = 0;
++            *action = PARSE_READ;
++        } else {
++            po->last_error = ERR_NOKEY;
++            *action = PARSE_ERROR;
++        }
++
+         TRACE_FLOW_EXIT();
+         return EOK;
+     }
+@@ -975,9 +985,18 @@ static int handle_kvp(struct parser_obj *po, uint32_t *action)
+     /* Find "=" */
+     eq = strchr(str, '=');
+     if (eq == NULL) {
+-        TRACE_ERROR_STRING("No equal sign", str);
+-        po->last_error = ERR_NOEQUAL;
+-        *action = PARSE_ERROR;
++        if (po->parse_flags & INI_PARSE_IGNORE_NON_KVP) {
++        /* Clean everything as if nothing happened  */
++            free(po->last_read);
++            po->last_read = NULL;
++            po->last_read_len = 0;
++            *action = PARSE_READ;
++        } else {
++            TRACE_ERROR_STRING("No equal sign", str);
++            po->last_error = ERR_NOEQUAL;
++            *action = PARSE_ERROR;
++        }
++
+         TRACE_FLOW_EXIT();
+         return EOK;
+     }
+-- 
+1.8.3.1
+

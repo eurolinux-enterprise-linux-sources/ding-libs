@@ -1,6 +1,6 @@
 Name: ding-libs
 Version: 0.4.0
-Release: 11%{?dist}
+Release: 11%{?dist}.1
 Summary: "Ding is not GLib" assorted utility libraries
 Group: Development/Libraries
 License: LGPLv3+
@@ -19,6 +19,8 @@ BuildRoot: %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 %global ini_config_version 1.1.0
 
 ### Patches ###
+Patch0001: 0001-ini_parse-Add-missing-TRACE_FLOW_EXIT.patch
+Patch0002: 0002-ini-Add-INI_PARSE_IGNORE_NON_KVP-flag.patch
 
 ### Dependencies ###
 # ding-libs is a meta-package that will pull in all of its own
@@ -323,6 +325,10 @@ structure
 %prep
 %setup -q
 
+for p in %patches ; do
+    %__patch -p1 -i $p
+done
+
 %build
 autoreconf -ivf
 %configure \
@@ -356,6 +362,9 @@ rm -f */doc/html/installdox
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Tue Sep 27 2016 Jakub Hrozek <jhrozek@redhat.com> - 0.4.0-12
+- Related: rhbz#1379582 - ding-libs don't parse lines without an equal sign
+
 * Thu Jun 03 2014 Jakub Hrozek <jhrozek@redhat.com> - 0.4.0-11
 - Do not package built objects in dhash-devel
 - Fix NVR in the previous changelog entry
